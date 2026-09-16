@@ -1,0 +1,47 @@
+name: Verify
+
+# Fast feedback on every push. This matters more than usual for this project:
+# Windows machines with Smart App Control enabled cannot compile Rust locally,
+# so for some contributors this workflow is the only thing that ever type-checks
+# the Rust side.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Build frontend
+        run: npm run build
+
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      # tauri-build reads frontendDist, so the frontend has to exist first.
+      - run: npm run build
+      - name: Check Rust
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
