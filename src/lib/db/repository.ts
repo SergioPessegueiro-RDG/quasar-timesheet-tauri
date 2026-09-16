@@ -211,17 +211,18 @@ export async function syncJiraData(
       const activityId = activityIds.get(worklog.issue.key);
       if (!activityId) continue;
       const times = jiraWorklogTimes(worklog.started, worklog.timeSpentSeconds);
-      const existing = await db.select<{ id: number }>(
-        "SELECT id FROM time_entries WHERE jira_worklog_id = $1 LIMIT 1",
+      const existing = await db.select<{ id: number; jiraDirty: number }>(
+        "SELECT id, jira_dirty AS jiraDirty FROM time_entries WHERE jira_worklog_id = $1 LIMIT 1",
         [worklog.id],
       );
       if (existing[0]) {
+        if (asBool(existing[0].jiraDirty)) continue;
         await db.execute(
           `UPDATE time_entries
               SET activity_id = $1, activity_label = $2, date = $3,
                   start_time = $4, end_time = $5, notes = $6, jira_key = $7,
                   jira_project = $8, issue_type = $9, updated_at = $10,
-                  external_source = 'jira', external_id = $11
+                  external_source = 'jira', external_id = $11, jira_dirty = 0
             WHERE id = $12`,
           [
             activityId, worklog.issue.summary, times.date, times.startTime, times.endTime,
@@ -302,13 +303,15 @@ export async function deleteActivity(id: number, deleteBlocks = false): Promise<
 
 export async function listTimeEntries(startDate: string, endDate: string): Promise<TimeEntry[]> {
   const db = await database();
-  return db.select<TimeEntry>(
-    `SELECT ${BLOCK_COLUMNS}, e.date AS date, e.jira_worklog_id AS jiraWorklogId
+  const rows = await db.select<TimeEntry>(
+    `SELECT ${BLOCK_COLUMNS}, e.date AS date, e.jira_worklog_id AS jiraWorklogId,
+            e.jira_dirty AS jiraDirty
        FROM time_entries e ${BLOCK_JOINS}
       WHERE e.date BETWEEN $1 AND $2
       ORDER BY e.date, e.start_time`,
     [startDate, endDate],
   );
+  return rows.map((row) => ({ ...row, jiraDirty: asBool(row.jiraDirty) }));
 }
 
 export type NewTimeEntry = Omit<TimeEntry, "id" | "color" | "activityName"> & {
@@ -344,7 +347,7 @@ export async function addTimeEntry(entry: NewTimeEntry): Promise<number> {
 export async function markJiraWorklogUploaded(id: number, worklogId: string): Promise<void> {
   const db = await database();
   await db.execute(
-    "UPDATE time_entries SET jira_worklog_id = $1, jira_uploaded_at = $2 WHERE id = $3",
+    "UPDATE time_entries SET jira_worklog_id = $1, jira_uploaded_at = $2, jira_dirty = 0 WHERE id = $3",
     [worklogId, now(), id],
   );
 }
@@ -358,7 +361,10 @@ export async function moveTimeEntry(
 ): Promise<void> {
   const db = await database();
   await db.execute(
-    "UPDATE time_entries SET date = $1, start_time = $2, end_time = $3, updated_at = $4 WHERE id = $5",
+    `UPDATE time_entries
+        SET date = $1, start_time = $2, end_time = $3, updated_at = $4,
+            jira_dirty = CASE WHEN jira_worklog_id IS NOT NULL THEN 1 ELSE jira_dirty END
+      WHERE id = $5`,
     [date, startTime, endTime, now(), id],
   );
 }
@@ -369,7 +375,8 @@ export async function updateTimeEntry(entry: TimeEntry): Promise<void> {
   await db.execute(
     `UPDATE time_entries
         SET activity_id = $1, date = $2, start_time = $3, end_time = $4, notes = $5,
-            jira_key = $6, jira_project = $7, issue_type = $8, updated_at = $9
+            jira_key = $6, jira_project = $7, issue_type = $8, updated_at = $9,
+            jira_dirty = CASE WHEN jira_worklog_id IS NOT NULL THEN 1 ELSE jira_dirty END
       WHERE id = $10`,
     [
       entry.activityId,

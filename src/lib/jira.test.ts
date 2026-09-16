@@ -8,6 +8,7 @@ import {
   jiraWorklogTimes,
   testJiraConnection,
   transitionJiraIssue,
+  updateJiraWorklog,
   uploadJiraWorklog,
 } from "./jira.ts";
 import type { TimeEntry } from "./types.ts";
@@ -69,6 +70,23 @@ test("Jira upload requires a meaningful work description", async () => {
     }),
     /description is required/i,
   );
+});
+
+test("dirty Jira worklogs update their existing remote ID", async () => {
+  let requestUrl = "";
+  let requestInit: RequestInit | undefined;
+  await updateJiraWorklog({ ...entry, jiraWorklogId: "456", jiraDirty: true }, {
+    baseUrl: "https://example.atlassian.net",
+    email: "user@example.com",
+    apiToken: "secret-token",
+  }, async (url, init) => {
+    requestUrl = String(url);
+    requestInit = init;
+    return Response.json({ id: "456" });
+  });
+  assert.equal(requestUrl, "https://example.atlassian.net/rest/api/3/issue/QDM-123/worklog/456");
+  assert.equal(requestInit?.method, "PUT");
+  assert.equal(JSON.parse(String(requestInit?.body)).comment.content[0].content[0].text, "Sprint plan");
 });
 
 test("Jira connection test returns the authenticated user", async () => {

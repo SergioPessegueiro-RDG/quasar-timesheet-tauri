@@ -52,6 +52,7 @@ interface BlockBase {
 export interface TimeEntry extends BlockBase {
   date: string; // "YYYY-MM-DD"
   jiraWorklogId?: string | null;
+  jiraDirty?: boolean;
 }
 
 /** A block on the permanent Template grid, keyed by weekday rather than a date. */

@@ -293,6 +293,20 @@ function jiraStarted(entry: TimeEntry): string {
   return `${entry.date}T${entry.startTime}:00.000${sign}${hours}${minutes}`;
 }
 
+function jiraWorklogBody(entry: TimeEntry) {
+  const description = entry.notes.trim();
+  if (!description) throw new Error("A Jira work description is required.");
+  return {
+    started: jiraStarted(entry),
+    timeSpentSeconds: durationMinutes(entry) * 60,
+    comment: {
+      type: "doc",
+      version: 1,
+      content: [{ type: "paragraph", content: [{ type: "text", text: description }] }],
+    },
+  };
+}
+
 /**
  * Uploads one worklog using Jira Cloud REST API v3.
  * Sources:
@@ -306,8 +320,6 @@ export async function uploadJiraWorklog(
 ): Promise<string> {
   const issueKey = entry.jiraKey?.trim().toUpperCase();
   if (!issueKey || !/^[A-Z][A-Z0-9_]*-\d+$/.test(issueKey)) throw new Error("Invalid Jira issue key.");
-  const description = entry.notes.trim();
-  if (!description) throw new Error("A Jira work description is required.");
   const response = await jiraFetch(
     `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog`,
     credentials,
@@ -316,15 +328,7 @@ export async function uploadJiraWorklog(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        started: jiraStarted(entry),
-        timeSpentSeconds: durationMinutes(entry) * 60,
-        comment: {
-          type: "doc",
-          version: 1,
-          content: [{ type: "paragraph", content: [{ type: "text", text: description }] }],
-        },
-      }),
+      body: JSON.stringify(jiraWorklogBody(entry)),
     },
     fetcher,
   );
@@ -336,4 +340,30 @@ export async function uploadJiraWorklog(
   const result = await response.json() as { id?: string };
   if (!result.id) throw new Error(`Jira accepted ${issueKey} but returned no worklog ID.`);
   return result.id;
+}
+
+/** Updates an existing Jira worklog instead of creating a duplicate. */
+export async function updateJiraWorklog(
+  entry: TimeEntry,
+  credentials: JiraCredentials,
+  fetcher?: Fetcher,
+): Promise<void> {
+  const issueKey = entry.jiraKey?.trim().toUpperCase();
+  const worklogId = entry.jiraWorklogId?.trim();
+  if (!issueKey || !/^[A-Z][A-Z0-9_]*-\d+$/.test(issueKey)) throw new Error("Invalid Jira issue key.");
+  if (!worklogId || !/^\d+$/.test(worklogId)) throw new Error("Invalid Jira worklog ID.");
+  const response = await jiraFetch(
+    `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog/${encodeURIComponent(worklogId)}`,
+    credentials,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jiraWorklogBody(entry)),
+    },
+    fetcher,
+  );
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Jira could not update ${issueKey} (${response.status})${detail ? `: ${detail}` : "."}`);
+  }
 }

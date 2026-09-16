@@ -93,6 +93,9 @@ const MIGRATIONS: string[][] = [
   [
     `ALTER TABLE activities ADD COLUMN jira_status TEXT`,
   ],
+  [
+    `ALTER TABLE time_entries ADD COLUMN jira_dirty INTEGER NOT NULL DEFAULT 0`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

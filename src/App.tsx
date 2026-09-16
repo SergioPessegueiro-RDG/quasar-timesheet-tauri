@@ -45,6 +45,7 @@ import {
   fetchJiraWorklogs,
   testJiraConnection,
   transitionJiraIssue,
+  updateJiraWorklog,
   uploadJiraWorklog,
   type JiraCredentials,
   type JiraTransition,
@@ -300,7 +301,7 @@ export default function App() {
         return;
       }
 
-      const pending = entries.filter((entry) => entry.jiraKey && !entry.jiraWorklogId);
+      const pending = entries.filter((entry) => entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty));
       if (!pending.length) {
         setJiraUploadMessage("No new Jira worklogs in this week.");
         return;
@@ -310,8 +311,13 @@ export default function App() {
       const failures: string[] = [];
       for (const entry of pending) {
         try {
-          const worklogId = await uploadJiraWorklog(entry, { baseUrl, email, apiToken });
-          await markJiraWorklogUploaded(entry.id, worklogId);
+          if (entry.jiraWorklogId) {
+            await updateJiraWorklog(entry, { baseUrl, email, apiToken });
+            await markJiraWorklogUploaded(entry.id, entry.jiraWorklogId);
+          } else {
+            const worklogId = await uploadJiraWorklog(entry, { baseUrl, email, apiToken });
+            await markJiraWorklogUploaded(entry.id, worklogId);
+          }
           uploaded++;
         } catch (cause) {
           failures.push(`${entry.jiraKey}: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -452,7 +458,7 @@ export default function App() {
     [entries],
   );
   const hasPendingJiraEntries = useMemo(
-    () => entries.some((entry) => Boolean(entry.jiraKey && !entry.jiraWorklogId)),
+    () => entries.some((entry) => Boolean(entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty))),
     [entries],
   );
 
