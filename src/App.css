@@ -1195,11 +1195,13 @@ button:focus-visible {
   letter-spacing: -0.02em;
 }
 
+.dialog:is(form),
 .dialog form,
 .dialog label {
   display: grid;
 }
 
+.dialog:is(form),
 .dialog form {
   gap: 15px;
 }
