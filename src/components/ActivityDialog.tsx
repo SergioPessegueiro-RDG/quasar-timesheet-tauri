@@ -118,6 +118,7 @@ export function ActivityDialog({
         {error && <p className="form-error">{error}</p>}
         <footer className="dialog-actions">
           {onDelete && <button className="danger-button" type="button" onClick={onDelete}>Delete</button>}
+          {!onDelete && <span />}
           <span />
           <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
           <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save activity"}</button>

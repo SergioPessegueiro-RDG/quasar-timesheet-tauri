@@ -186,6 +186,7 @@ export function TimeBlockDialog({
                 Delete
               </button>
             )}
+            {!onDelete && <span />}
             <span />
             <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
             <button className="primary-button" type="submit" disabled={saving}>
