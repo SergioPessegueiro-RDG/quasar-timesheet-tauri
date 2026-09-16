@@ -3,6 +3,10 @@ import { toMinutes } from "./types.ts";
 
 export const DAY_MS = 86_400_000;
 
+export function calendarFocusStart(currentMinute: number): number {
+  return Math.min(16 * 60, Math.max(7 * 60, currentMinute - 4 * 60));
+}
+
 export function startOfWeek(value: Date): Date {
   const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
   const mondayOffset = (date.getDay() + 6) % 7;

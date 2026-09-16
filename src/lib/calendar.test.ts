@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isoDate, layoutOverlaps, snapMinute, startOfWeek } from "./calendar.ts";
+import {
+  calendarFocusStart,
+  isoDate,
+  layoutOverlaps,
+  snapMinute,
+  startOfWeek,
+} from "./calendar.ts";
 
 test("calendar date and snapping rules", () => {
   assert.equal(isoDate(startOfWeek(new Date(2026, 8, 16))), "2026-09-14");
@@ -21,4 +27,11 @@ test("overlap layout uses transitive clusters and releases columns", () => {
   assert.deepEqual(layout.get(2), { column: 1, columns: 2 });
   assert.deepEqual(layout.get(3), { column: 0, columns: 2 });
   assert.deepEqual(layout.get(4), { column: 0, columns: 1 });
+});
+
+test("calendar focus centers on now without wasting space before 7 AM", () => {
+  assert.equal(calendarFocusStart(7 * 60 + 30), 7 * 60);
+  assert.equal(calendarFocusStart(12 * 60), 8 * 60);
+  assert.equal(calendarFocusStart(18 * 60), 14 * 60);
+  assert.equal(calendarFocusStart(22 * 60), 16 * 60);
 });

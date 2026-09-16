@@ -19,6 +19,7 @@ import {
 } from "../lib/constants";
 import {
   addDays,
+  calendarFocusStart,
   isoDate,
   layoutOverlaps,
   snapMinute,
@@ -139,8 +140,12 @@ export function WeeklyCalendar({
     if (!scroll || !grid) return;
     const gridTop = grid.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
     const headerHeight = scroll.querySelector<HTMLElement>(".calendar-header")?.offsetHeight ?? 0;
-    scroll.scrollTop = gridTop + (startHour / 24) * grid.offsetHeight - headerHeight - 8;
-  }, [startHour, endHour]);
+    const now = new Date();
+    const focusStart = showNow
+      ? calendarFocusStart(now.getHours() * 60 + now.getMinutes())
+      : startHour * 60;
+    scroll.scrollTop = gridTop + (focusStart / totalMinutes) * grid.offsetHeight - headerHeight - 8;
+  }, [endHour, showNow, startHour, totalMinutes]);
 
   function setDragState(next: DragState | null) {
     dragRef.current = next;
