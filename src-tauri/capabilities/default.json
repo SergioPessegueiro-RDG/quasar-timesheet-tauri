@@ -8,6 +8,10 @@
     "opener:default",
     "sql:default",
     "dialog:default",
-    "fs:default"
+    "fs:default",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://*.atlassian.net" }]
+    }
   ]
 }

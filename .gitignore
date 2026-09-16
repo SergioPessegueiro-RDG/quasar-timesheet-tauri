@@ -26,3 +26,6 @@ dist-ssr
 # Rust / Tauri build output
 src-tauri/target
 src-tauri/gen/schemas
+
+# Local code knowledge graph (regenerated with graphify update .)
+graphify-out/

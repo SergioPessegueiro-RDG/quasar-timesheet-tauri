@@ -78,6 +78,10 @@ const MIGRATIONS: string[][] = [
        ON time_entries(external_source, external_id)
        WHERE external_id IS NOT NULL`,
   ],
+  [
+    `ALTER TABLE time_entries ADD COLUMN jira_worklog_id TEXT`,
+    `ALTER TABLE time_entries ADD COLUMN jira_uploaded_at TEXT`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

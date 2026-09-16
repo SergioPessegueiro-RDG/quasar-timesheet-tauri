@@ -50,6 +50,7 @@ export function parseOutlookIcs(
   for (const component of calendar.getAllSubcomponents("vevent")) {
     const event = new ICAL.Event(component);
     if (event.isRecurrenceException()) continue;
+    if (!event.uid?.trim()) throw new Error("Calendar contains an event without the required UID.");
 
     const addOccurrence = (occurrence: ICAL.Time) => {
       if (++occurrenceCount > MAX_OCCURRENCES) {

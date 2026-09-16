@@ -12,7 +12,7 @@ const TABLES = {
   time_entries: [
     "id", "activity_id", "activity_label", "date", "start_time", "end_time",
     "notes", "jira_key", "jira_project", "issue_type", "created_at", "updated_at",
-    "external_source", "external_id",
+    "external_source", "external_id", "jira_worklog_id", "jira_uploaded_at",
   ],
   template_entries: [
     "id", "activity_id", "activity_label", "day_of_week", "start_time", "end_time",

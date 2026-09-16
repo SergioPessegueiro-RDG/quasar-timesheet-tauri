@@ -192,7 +192,7 @@ export async function deleteActivity(id: number, deleteBlocks = false): Promise<
 export async function listTimeEntries(startDate: string, endDate: string): Promise<TimeEntry[]> {
   const db = await database();
   return db.select<TimeEntry>(
-    `SELECT ${BLOCK_COLUMNS}, e.date AS date
+    `SELECT ${BLOCK_COLUMNS}, e.date AS date, e.jira_worklog_id AS jiraWorklogId
        FROM time_entries e ${BLOCK_JOINS}
       WHERE e.date BETWEEN $1 AND $2
       ORDER BY e.date, e.start_time`,
@@ -244,7 +244,7 @@ export async function importOutlookEvents(
           (activity_id, activity_label, date, start_time, end_time, notes,
            jira_key, jira_project, issue_type, created_at, updated_at,
            external_source, external_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, 'outlook', $11)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'outlook', $12)`,
         [
           activity.id,
           activity.name,
@@ -255,6 +255,7 @@ export async function importOutlookEvents(
           activity.jiraKey,
           activity.jiraProject,
           activity.issueType,
+          timestamp,
           timestamp,
           event.externalId,
         ],
@@ -267,6 +268,14 @@ export async function importOutlookEvents(
     throw cause;
   }
   return { created, skippedDuplicates: events.length - created };
+}
+
+export async function markJiraWorklogUploaded(id: number, worklogId: string): Promise<void> {
+  const db = await database();
+  await db.execute(
+    "UPDATE time_entries SET jira_worklog_id = $1, jira_uploaded_at = $2 WHERE id = $3",
+    [worklogId, now(), id],
+  );
 }
 
 /** Used by every drag, resize and cross-day move, so it stays deliberately narrow. */

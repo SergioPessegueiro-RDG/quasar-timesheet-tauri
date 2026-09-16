@@ -1385,6 +1385,12 @@ button:focus-visible {
   background: color-mix(in srgb, #df6b72 10%, transparent);
 }
 
+.form-help {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .export-message {
   color: var(--text-soft);
   background: var(--accent-soft);
