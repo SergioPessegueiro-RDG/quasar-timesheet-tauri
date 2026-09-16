@@ -425,7 +425,6 @@ export default function App() {
                   <button type="button" aria-label="Next week" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
                 </div>
                 <button className="secondary-button toolbar-button" type="button" onClick={applyTemplate}>Apply template</button>
-                <button className="secondary-button toolbar-button" type="button" onClick={() => setOutlookImportOpen(true)}>Import Outlook</button>
                 <button className="secondary-button toolbar-button jira-button" type="button" onClick={uploadCurrentWeekToJira} disabled={jiraUploading}>
                   <JiraMark /> {jiraUploading ? "Uploading…" : "Upload Jira"}
                 </button>
@@ -590,6 +589,10 @@ export default function App() {
           onExportCsv={() => {
             setSettingsOpen(false);
             setExportOpen(true);
+          }}
+          onImportOutlook={() => {
+            setSettingsOpen(false);
+            setOutlookImportOpen(true);
           }}
           onSave={async (
             nextTheme,

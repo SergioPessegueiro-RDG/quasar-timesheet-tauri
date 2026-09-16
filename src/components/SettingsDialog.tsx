@@ -14,6 +14,7 @@ interface SettingsDialogProps {
   showWeekends: boolean;
   onClose: () => void;
   onExportCsv: () => void;
+  onImportOutlook: () => void;
   onSave: (
     theme: ThemeMode,
     showTimer: boolean,
@@ -40,6 +41,7 @@ export function SettingsDialog({
   showWeekends: initialShowWeekends,
   onClose,
   onExportCsv,
+  onImportOutlook,
   onSave,
 }: SettingsDialogProps) {
   const [theme, setTheme] = useState(initialTheme);
@@ -241,6 +243,16 @@ export function SettingsDialog({
             <span>API token</span>
             <input type="password" value={jiraApiToken} onChange={(event) => setJiraApiToken(event.target.value)} autoComplete="current-password" />
           </label>
+        </section>
+
+        <section className="settings-section backup-section">
+          <div>
+            <strong>Outlook calendar</strong>
+            <p>Configure calendar subscription links and import events.</p>
+          </div>
+          <div className="backup-actions">
+            <button className="secondary-button" type="button" onClick={onImportOutlook}>Import Outlook…</button>
+          </div>
         </section>
 
         <section className="settings-section backup-section">
