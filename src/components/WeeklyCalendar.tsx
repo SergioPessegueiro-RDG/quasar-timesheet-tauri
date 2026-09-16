@@ -3,6 +3,7 @@ import {
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -101,16 +102,17 @@ export function WeeklyCalendar({
   onMove,
   onDelete,
 }: WeeklyCalendarProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activityDragOver, setActivityDragOver] = useState(false);
   const [clock, setClock] = useState(() => new Date());
-  const totalMinutes = (endHour - startHour) * 60;
+  const totalMinutes = 24 * 60;
   const dayCount = dayNames.length;
-  const relativeMinute = (time: string) => toMinutes(time) - startHour * 60;
-  const fullTime = (relative: number) => toTime(startHour * 60 + relative);
+  const relativeMinute = toMinutes;
+  const fullTime = toTime;
 
   const dates = useMemo(
     () => dayNames.map((_, index) => addDays(weekStart, index)),
@@ -126,6 +128,15 @@ export function WeeklyCalendar({
     const timer = window.setInterval(() => setClock(new Date()), 10_000);
     return () => window.clearInterval(timer);
   }, [showNow]);
+
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current;
+    const grid = lanesRef.current?.parentElement;
+    if (!scroll || !grid) return;
+    const gridTop = grid.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
+    const headerHeight = scroll.querySelector<HTMLElement>(".calendar-header")?.offsetHeight ?? 0;
+    scroll.scrollTop = gridTop + (startHour / 24) * grid.offsetHeight - headerHeight - 8;
+  }, [startHour, endHour]);
 
   function setDragState(next: DragState | null) {
     dragRef.current = next;
@@ -351,9 +362,7 @@ export function WeeklyCalendar({
 
   const preview = drag?.moved ? drag : null;
   const today = isoDate(clock);
-  const nowMinute = clock.getHours() * 60 + clock.getMinutes() + clock.getSeconds() / 60 - startHour * 60;
-  const nowPosition = Math.max(0, Math.min(totalMinutes, nowMinute));
-  const nowRange = nowMinute < 0 ? "before" : nowMinute > totalMinutes ? "after" : "within";
+  const nowMinute = clock.getHours() * 60 + clock.getMinutes() + clock.getSeconds() / 60;
   const nowLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(clock);
   const calendarStyle = {
     "--day-count": dayCount,
@@ -365,28 +374,25 @@ export function WeeklyCalendar({
 
   return (
     <section className="calendar-card" aria-label="Weekly timesheet" style={calendarStyle}>
-      <div className="calendar-scroll">
+      <div className="calendar-scroll" ref={scrollRef}>
       <div className="calendar-header">
         <div className="time-gutter header-gutter" />
         {dates.map((date, index) => (
           <div className={`day-heading${isoDate(date) === today ? " is-today" : ""}`} key={dateKeys[index]}>
             <span>{dayNames[index]}</span>
             {showDates && <strong>{dateLabel(date)}</strong>}
-            {showNow && isoDate(date) === today && nowRange !== "within" && (
-              <small className="now-outside-hours">{nowLabel} · {nowRange} visible hours</small>
-            )}
           </div>
         ))}
       </div>
 
         <div className="calendar-grid">
           <div className="time-gutter time-labels" aria-hidden="true">
-            {Array.from({ length: endHour - startHour + 1 }, (_, index) => (
+            {Array.from({ length: 25 }, (_, hour) => (
               <span
-                key={index}
-                style={{ top: `${(index / (endHour - startHour)) * 100}%` }}
+                key={hour}
+                style={{ top: `${(hour / 24) * 100}%` }}
               >
-                {hourLabel(startHour + index)}
+                {hourLabel(hour)}
               </span>
             ))}
           </div>
@@ -420,10 +426,10 @@ export function WeeklyCalendar({
               const dayEntries = entriesByDay[dayIndex];
               return (
                 <div className={`day-lane${dateKeys[dayIndex] === today ? " is-today" : ""}`} key={dateKeys[dayIndex]}>
-                  {showNow && dateKeys[dayIndex] === today && nowRange === "within" && (
+                  {showNow && dateKeys[dayIndex] === today && (
                       <div
                         className="now-line"
-                        style={{ top: `${(nowPosition / totalMinutes) * 100}%` }}
+                        style={{ top: `${(nowMinute / totalMinutes) * 100}%` }}
                       >
                         <span>{nowLabel}</span>
                       </div>

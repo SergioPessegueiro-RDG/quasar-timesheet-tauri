@@ -130,13 +130,12 @@ export function SettingsDialog({
   return (
     <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <form className="dialog settings-dialog" onSubmit={submit}>
-        <header>
+        <div className="dialog-heading">
           <div>
             <p className="eyebrow">Preferences</p>
             <h2>Settings</h2>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close">×</button>
-        </header>
+        </div>
 
         <section className="settings-section">
           <div>
@@ -163,7 +162,7 @@ export function SettingsDialog({
         <section className="settings-section">
           <div>
             <strong>Calendar</strong>
-            <p>Set the visible work day and optionally include Saturday and Sunday.</p>
+            <p>Choose the hours shown first. The rest of the day remains available by scrolling.</p>
           </div>
           <div className="form-row work-hours">
             <label>

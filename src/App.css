@@ -718,17 +718,6 @@ button:focus-visible {
   color: var(--accent);
 }
 
-.now-outside-hours {
-  position: absolute;
-  right: 4px;
-  bottom: 2px;
-  color: #f05c68;
-  font-size: 7px;
-  font-weight: 750;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .calendar-scroll {
   min-height: 0;
   flex: 1;
@@ -740,7 +729,7 @@ button:focus-visible {
 .calendar-grid {
   position: relative;
   min-width: var(--calendar-min-width);
-  height: clamp(var(--calendar-min-height), calc(100vh - 305px), 2048px);
+  height: var(--calendar-min-height);
 }
 
 .time-gutter {
