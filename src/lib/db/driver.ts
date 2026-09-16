@@ -60,13 +60,16 @@ async function createBrowserDriver(): Promise<SqlDriver> {
     async select<T>(sql: string, params: unknown[] = []) {
       return db.exec({
         sql: toPositional(sql),
-        bind: params as never,
+        ...(params.length ? { bind: params as never } : {}),
         rowMode: "object",
         returnValue: "resultRows",
       }) as T[];
     },
     async execute(sql: string, params: unknown[] = []) {
-      db.exec({ sql: toPositional(sql), bind: params as never });
+      db.exec({
+        sql: toPositional(sql),
+        ...(params.length ? { bind: params as never } : {}),
+      });
       return {
         lastInsertId: Number(db.selectValue("SELECT last_insert_rowid()") ?? 0),
         rowsAffected: db.changes(),

@@ -20,6 +20,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Test
+        run: npm test
       - name: Type-check
         run: npx tsc --noEmit
       - name: Build frontend

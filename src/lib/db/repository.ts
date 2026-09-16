@@ -1,4 +1,4 @@
-import { FALLBACK_COLOR, PROJECT_COLORS } from "../constants";
+import { DEFAULT_JIRA_PROJECT, FALLBACK_COLOR, PROJECT_COLORS } from "../constants";
 import type { Activity, Project, TemplateEntry, TimeEntry } from "../types";
 import { database } from "./index";
 
@@ -28,13 +28,18 @@ const BLOCK_JOINS = `
 // Projects
 // ---------------------------------------------------------------------------
 
+function asBool(value: unknown): boolean {
+  return value === 1 || value === true || value === "1";
+}
+
 export async function listProjects(): Promise<Project[]> {
   const db = await database();
-  return db.select<Project>(
+  const rows = await db.select<Project>(
     `SELECT id, name, color, sort_order AS sortOrder, collapsed
        FROM projects
       ORDER BY sort_order, name COLLATE NOCASE`,
   );
+  return rows.map((row) => ({ ...row, collapsed: asBool(row.collapsed) }));
 }
 
 /** Picks the first unused palette colour, so two projects rarely start alike. */
@@ -104,7 +109,7 @@ export async function deleteProject(id: number, deleteActivities = false): Promi
 
 export async function listActivities(includeArchived = false): Promise<Activity[]> {
   const db = await database();
-  return db.select<Activity>(
+  const rows = await db.select<Activity>(
     `SELECT a.id                       AS id,
             a.name                     AS name,
             a.jira_key                 AS jiraKey,
@@ -120,6 +125,7 @@ export async function listActivities(includeArchived = false): Promise<Activity[
       ORDER BY a.name COLLATE NOCASE`,
     [includeArchived ? 1 : 0],
   );
+  return rows.map((row) => ({ ...row, archived: asBool(row.archived) }));
 }
 
 export async function addActivity(
@@ -274,6 +280,129 @@ export async function listTemplateEntries(): Promise<TemplateEntry[]> {
        FROM template_entries e ${BLOCK_JOINS}
       ORDER BY e.day_of_week, e.start_time`,
   );
+}
+
+export type NewTemplateEntry = Omit<TemplateEntry, "id" | "color" | "activityName"> & {
+  activityLabel: string;
+};
+
+export async function addTemplateEntry(entry: NewTemplateEntry): Promise<number> {
+  const db = await database();
+  const timestamp = now();
+  const result = await db.execute(
+    `INSERT INTO template_entries
+        (activity_id, activity_label, day_of_week, start_time, end_time, notes,
+         jira_key, jira_project, issue_type, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [
+      entry.activityId,
+      entry.activityLabel,
+      entry.dayOfWeek,
+      entry.startTime,
+      entry.endTime,
+      entry.notes,
+      entry.jiraKey,
+      entry.jiraProject,
+      entry.issueType,
+      timestamp,
+      timestamp,
+    ],
+  );
+  return result.lastInsertId;
+}
+
+export async function moveTemplateEntry(
+  id: number,
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string,
+): Promise<void> {
+  const db = await database();
+  await db.execute(
+    `UPDATE template_entries
+        SET day_of_week = $1, start_time = $2, end_time = $3, updated_at = $4
+      WHERE id = $5`,
+    [dayOfWeek, startTime, endTime, now(), id],
+  );
+}
+
+export async function updateTemplateEntry(entry: TemplateEntry): Promise<void> {
+  const db = await database();
+  await db.execute(
+    `UPDATE template_entries
+        SET activity_id = $1, day_of_week = $2, start_time = $3, end_time = $4, notes = $5,
+            jira_key = $6, jira_project = $7, issue_type = $8, updated_at = $9
+      WHERE id = $10`,
+    [
+      entry.activityId,
+      entry.dayOfWeek,
+      entry.startTime,
+      entry.endTime,
+      entry.notes,
+      entry.jiraKey,
+      entry.jiraProject,
+      entry.issueType,
+      now(),
+      entry.id,
+    ],
+  );
+}
+
+export async function deleteTemplateEntry(id: number): Promise<void> {
+  const db = await database();
+  await db.execute("DELETE FROM template_entries WHERE id = $1", [id]);
+}
+
+/** Occupied slots are left alone — never overwritten. */
+export async function applyTemplateToWeek(
+  weekDates: string[],
+): Promise<{ created: number; skipped: TemplateEntry[] }> {
+  const template = await listTemplateEntries();
+  const existing = await listTimeEntries(weekDates[0] ?? "", weekDates[weekDates.length - 1] ?? "");
+  const skipped: TemplateEntry[] = [];
+  let created = 0;
+
+  for (const block of template) {
+    const date = weekDates[block.dayOfWeek];
+    if (!date) continue;
+    const clash = existing.some(
+      (entry) =>
+        entry.date === date && entry.startTime < block.endTime && block.startTime < entry.endTime,
+    );
+    if (clash) {
+      skipped.push(block);
+      continue;
+    }
+    await addTimeEntry({
+      activityId: block.activityId,
+      activityLabel: block.activityName,
+      date,
+      startTime: block.startTime,
+      endTime: block.endTime,
+      notes: block.notes,
+      jiraKey: block.jiraKey,
+      jiraProject: block.jiraProject,
+      issueType: block.issueType,
+    });
+    created += 1;
+  }
+  return { created, skipped };
+}
+
+export async function listKnownJiraProjects(): Promise<string[]> {
+  const db = await database();
+  const rows = await db.select<{ jira_project: string }>(
+    `SELECT DISTINCT jira_project FROM time_entries
+      WHERE jira_project IS NOT NULL AND TRIM(jira_project) != ''
+     UNION
+     SELECT DISTINCT jira_project FROM template_entries
+      WHERE jira_project IS NOT NULL AND TRIM(jira_project) != ''`,
+  );
+  const used = rows.map((row) => row.jira_project.trim()).filter(Boolean);
+  return [
+    DEFAULT_JIRA_PROJECT,
+    ...used.filter((name) => name !== DEFAULT_JIRA_PROJECT).sort(),
+  ];
 }
 
 // ---------------------------------------------------------------------------

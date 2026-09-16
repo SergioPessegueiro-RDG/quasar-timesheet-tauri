@@ -17,6 +17,18 @@ export const RESIZE_GRIP_PX = 7;
 /** A block can never be dragged or resized shorter than one slot. */
 export const MIN_BLOCK_MINUTES = SLOT_MINUTES;
 
+export const GUTTER_WIDTH_PX = 60;
+export const HEADER_HEIGHT_PX = 44;
+export const MIN_SLOT_HEIGHT_PX = 22;
+export const MAX_SLOT_HEIGHT_PX = 64;
+export const MIN_DAY_WIDTH_PX = 140;
+export const MAX_DAY_WIDTH_PX = 340;
+export const BLOCK_RADIUS_PX = 10;
+export const UNDO_LIMIT = 50;
+export const ZOOM_MIN = 0.7;
+export const ZOOM_MAX = 1.3;
+export const ZOOM_STEP = 0.15;
+
 /**
  * Palette offered when creating a Project. Every block's colour comes from its
  * Activity's Project, so these are the only colours that ever reach the grid.
