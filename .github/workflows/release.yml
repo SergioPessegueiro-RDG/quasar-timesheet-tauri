@@ -48,8 +48,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: --target ${{ matrix.tauri-target }}
-          # Only set on a tag push; a manual run just uploads artifacts instead.
+          # Only set on a tag push, which is what makes this publish a release.
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: QUASAR Timesheet Manager ${{ github.ref_name }}
           releaseDraft: true
           prerelease: false
+
+      # Without a tag the action above publishes nothing and leaves the build on
+      # the runner, so a manual run needs this to get anything downloadable.
+      - name: Upload installers
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.tauri-target }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/${{ matrix.tauri-target }}/release/bundle/**
+            src-tauri/target/${{ matrix.tauri-target }}/release/*.exe
+            src-tauri/target/${{ matrix.tauri-target }}/release/*.app
