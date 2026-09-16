@@ -2,7 +2,6 @@ import { type FormEvent, useEffect, useState } from "react";
 import { isTauri } from "../lib/db";
 import { getSetting, listTimeEntries, setSetting } from "../lib/db/repository";
 import { buildCsv } from "../lib/export";
-import { JiraMark } from "./JiraMark";
 
 interface ExportDialogProps {
   initialStart: string;
@@ -87,12 +86,9 @@ export function ExportDialog({ initialStart, initialEnd, onClose }: ExportDialog
     }}>
       <section className="dialog compact-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
         <div className="dialog-heading">
-          <div className="dialog-brand-heading">
-            <JiraMark className="dialog-logo" />
-            <div>
-              <p className="eyebrow">Jira worklogs</p>
-              <h2 id="export-title">Export CSV</h2>
-            </div>
+          <div>
+            <p className="eyebrow">Jira worklogs</p>
+            <h2 id="export-title">Export CSV</h2>
           </div>
           <button className="dialog-close" type="button" onClick={onClose} aria-label="Close">×</button>
         </div>

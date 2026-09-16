@@ -383,9 +383,6 @@ export default function App() {
                 <button className="secondary-button toolbar-button jira-button" type="button" onClick={() => setJiraUploadOpen(true)}>
                   <JiraMark /> Upload Jira
                 </button>
-                <button className="primary-button jira-button" type="button" onClick={() => setExportOpen(true)}>
-                  <JiraMark /> Export CSV
-                </button>
               </div>
             )}
           </div>
@@ -543,6 +540,10 @@ export default function App() {
           endHour={endHour}
           showWeekends={showWeekends}
           onClose={() => setSettingsOpen(false)}
+          onExportCsv={() => {
+            setSettingsOpen(false);
+            setExportOpen(true);
+          }}
           onSave={async (
             nextTheme,
             nextShowTimer,

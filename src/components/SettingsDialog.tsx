@@ -11,6 +11,7 @@ interface SettingsDialogProps {
   endHour: number;
   showWeekends: boolean;
   onClose: () => void;
+  onExportCsv: () => void;
   onSave: (
     theme: ThemeMode,
     showTimer: boolean,
@@ -36,6 +37,7 @@ export function SettingsDialog({
   endHour: initialEndHour,
   showWeekends: initialShowWeekends,
   onClose,
+  onExportCsv,
   onSave,
 }: SettingsDialogProps) {
   const [theme, setTheme] = useState(initialTheme);
@@ -190,6 +192,16 @@ export function SettingsDialog({
           <span><strong>Show weekends</strong><small>Include Saturday and Sunday across calendar views.</small></span>
           <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
         </label>
+
+        <section className="settings-section backup-section">
+          <div>
+            <strong>Jira CSV export</strong>
+            <p>Export dated worklogs for Jira's CSV importer.</p>
+          </div>
+          <div className="backup-actions">
+            <button className="secondary-button" type="button" onClick={onExportCsv}>Export CSV…</button>
+          </div>
+        </section>
 
         <section className="settings-section backup-section">
           <div>
