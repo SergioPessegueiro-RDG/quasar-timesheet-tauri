@@ -2,6 +2,11 @@ import ICAL from "ical.js";
 
 export const MAX_ICS_BYTES = 5 * 1024 * 1024;
 const MAX_OCCURRENCES = 5_000;
+const OUTLOOK_FEED_HOSTS = new Set([
+  "outlook.office365.com",
+  "outlook.office.com",
+  "outlook.live.com",
+]);
 
 export interface OutlookEvent {
   externalId: string;
@@ -10,6 +15,45 @@ export interface OutlookEvent {
   date: string;
   startTime: string;
   endTime: string;
+}
+
+// Outlook publishes read-only ICS links for calendar subscriptions.
+// Source: https://support.microsoft.com/en-us/outlook/share-your-calendar-in-outlook-on-the-web
+export function outlookFeedUrl(value: string): string {
+  const url = new URL(value.trim().replace(/^webcal:/i, "https:"));
+  if (
+    url.protocol !== "https:"
+    || !OUTLOOK_FEED_HOSTS.has(url.hostname.toLowerCase())
+    || !url.pathname.toLowerCase().endsWith(".ics")
+    || url.username
+    || url.password
+  ) {
+    throw new Error("Use an Outlook HTTPS .ics subscription link.");
+  }
+  return url.href;
+}
+
+export async function fetchOutlookFeed(url: string, fetcher?: typeof fetch): Promise<string> {
+  const safeUrl = outlookFeedUrl(url);
+  const native = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+  const request = fetcher ?? (native ? (await import("@tauri-apps/plugin-http")).fetch : fetch);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await request(safeUrl, {
+      signal: controller.signal,
+      redirect: "error",
+      headers: { Accept: "text/calendar" },
+    });
+    if (!response.ok) throw new Error(`Outlook returned ${response.status}.`);
+    const length = Number(response.headers.get("Content-Length"));
+    if (Number.isFinite(length) && length > MAX_ICS_BYTES) throw new Error("Calendar feeds are limited to 5 MB.");
+    const text = await response.text();
+    if (new Blob([text]).size > MAX_ICS_BYTES) throw new Error("Calendar feeds are limited to 5 MB.");
+    return text;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function localDate(date: Date): string {
@@ -34,7 +78,7 @@ export function parseOutlookIcs(
   rangeStart: string,
   rangeEnd: string,
 ): { events: OutlookEvent[]; skippedAllDay: number } {
-  if (new Blob([text]).size > MAX_ICS_BYTES) throw new Error("Calendar files are limited to 5 MB.");
+  if (new Blob([text]).size > MAX_ICS_BYTES) throw new Error("Calendar feeds are limited to 5 MB.");
   if (rangeStart > rangeEnd) throw new Error("The end date must be on or after the start date.");
 
   const calendar = new ICAL.Component(ICAL.parse(text));

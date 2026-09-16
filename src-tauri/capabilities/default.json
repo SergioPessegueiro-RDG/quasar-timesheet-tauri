@@ -11,7 +11,12 @@
     "fs:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://*.atlassian.net" }]
+      "allow": [
+        { "url": "https://*.atlassian.net" },
+        { "url": "https://outlook.office365.com" },
+        { "url": "https://outlook.office.com" },
+        { "url": "https://outlook.live.com" }
+      ]
     }
   ]
 }

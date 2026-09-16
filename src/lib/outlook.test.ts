@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseOutlookIcs } from "./outlook.ts";
+import { fetchOutlookFeed, outlookFeedUrl, parseOutlookIcs } from "./outlook.ts";
 
 const calendar = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -48,4 +48,25 @@ test("Outlook import expands recurrences and skips all-day events", () => {
     ],
   );
   assert.equal(result.skippedAllDay, 1);
+});
+
+test("Outlook feed links accept Microsoft HTTPS and reject other hosts", () => {
+  assert.equal(
+    outlookFeedUrl("webcal://outlook.office365.com/owa/calendar/id/calendar.ics"),
+    "https://outlook.office365.com/owa/calendar/id/calendar.ics",
+  );
+  assert.throws(() => outlookFeedUrl("https://example.com/private.ics"), /Outlook HTTPS/);
+});
+
+test("Outlook feed fetch requests calendar content without exposing another origin", async () => {
+  let requested = "";
+  const text = await fetchOutlookFeed(
+    "https://outlook.live.com/owa/calendar/id/calendar.ics",
+    async (url) => {
+      requested = String(url);
+      return new Response(calendar, { headers: { "Content-Type": "text/calendar" } });
+    },
+  );
+  assert.equal(requested, "https://outlook.live.com/owa/calendar/id/calendar.ics");
+  assert.equal(text, calendar);
 });

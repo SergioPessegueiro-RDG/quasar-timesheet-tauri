@@ -1,7 +1,6 @@
-import { type ChangeEvent, type FormEvent, useRef, useState } from "react";
-import { isTauri } from "../lib/db";
-import { importOutlookEvents } from "../lib/db/repository";
-import { MAX_ICS_BYTES, parseOutlookIcs } from "../lib/outlook";
+import { type FormEvent, useEffect, useState } from "react";
+import { getSetting, importOutlookEvents, setSetting } from "../lib/db/repository";
+import { fetchOutlookFeed, parseOutlookIcs } from "../lib/outlook";
 import type { Activity } from "../lib/types";
 
 interface OutlookImportDialogProps {
@@ -19,56 +18,46 @@ export function OutlookImportDialog({
   onImported,
   onClose,
 }: OutlookImportDialogProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [activityId, setActivityId] = useState(activities[0]?.id ?? 0);
   const [start, setStart] = useState(initialStart);
   const [end, setEnd] = useState(initialEnd);
-  const [fileName, setFileName] = useState("");
-  const [contents, setContents] = useState("");
+  const [urls, setUrls] = useState("");
   const [message, setMessage] = useState("");
   const [importing, setImporting] = useState(false);
 
-  async function chooseFile() {
-    setMessage("");
-    if (!isTauri()) return inputRef.current?.click();
-    const [{ open }, { readTextFile, stat }] = await Promise.all([
-      import("@tauri-apps/plugin-dialog"),
-      import("@tauri-apps/plugin-fs"),
-    ]);
-    const path = await open({
-      title: "Import Outlook calendar",
-      multiple: false,
-      filters: [{ name: "iCalendar files", extensions: ["ics"] }],
+  useEffect(() => {
+    getSetting("outlook_ics_urls").then((value) => {
+      if (!value) return;
+      try {
+        const saved: unknown = JSON.parse(value);
+        if (Array.isArray(saved) && saved.every((item) => typeof item === "string")) {
+          setUrls(saved.join("\n"));
+        }
+      } catch {
+        // Ignore a malformed local setting; the user can replace it in the form.
+      }
     });
-    if (!path) return;
-    if ((await stat(path)).size > MAX_ICS_BYTES) throw new Error("Calendar files are limited to 5 MB.");
-    setContents(await readTextFile(path));
-    setFileName(path.split(/[\\/]/).pop() ?? "Outlook calendar");
-  }
-
-  async function browserFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_ICS_BYTES) return setMessage("Calendar files are limited to 5 MB.");
-    setContents(await file.text());
-    setFileName(file.name);
-    event.target.value = "";
-  }
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     const activity = activities.find(({ id }) => id === activityId);
-    if (!contents || !activity) return setMessage("Choose a calendar file and an activity.");
+    const feeds = [...new Set(urls.split(/\r?\n/).map((value) => value.trim()).filter(Boolean))];
+    if (!feeds.length || !activity) return setMessage("Add at least one Outlook calendar link and choose an activity.");
+    if (feeds.length > 10) return setMessage("You can import up to 10 calendar links at once.");
     setImporting(true);
     setMessage("");
     try {
-      const parsed = parseOutlookIcs(contents, start, end);
-      const result = await importOutlookEvents(activity, parsed.events);
+      const calendars = await Promise.all(feeds.map((url) => fetchOutlookFeed(url)));
+      const parsed = calendars.map((contents) => parseOutlookIcs(contents, start, end));
+      const result = await importOutlookEvents(activity, parsed.flatMap(({ events }) => events));
+      await setSetting("outlook_ics_urls", JSON.stringify(feeds));
       await onImported();
+      const skippedAllDay = parsed.reduce((sum, item) => sum + item.skippedAllDay, 0);
       setMessage(
-        `Imported ${result.created} event${result.created === 1 ? "" : "s"}`
+        `Imported ${result.created} event${result.created === 1 ? "" : "s"} from ${feeds.length} calendar${feeds.length === 1 ? "" : "s"}`
         + (result.skippedDuplicates ? `; skipped ${result.skippedDuplicates} already imported.` : ".")
-        + (parsed.skippedAllDay ? ` Skipped ${parsed.skippedAllDay} all-day event${parsed.skippedAllDay === 1 ? "" : "s"}.` : ""),
+        + (skippedAllDay ? ` Skipped ${skippedAllDay} all-day event${skippedAllDay === 1 ? "" : "s"}.` : ""),
       );
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
@@ -85,7 +74,7 @@ export function OutlookImportDialog({
         <div className="dialog-heading">
           <div>
             <p className="eyebrow">Outlook calendar</p>
-            <h2 id="outlook-title">Import .ics</h2>
+            <h2 id="outlook-title">Import calendar links</h2>
           </div>
           <button className="dialog-close" type="button" onClick={onClose} aria-label="Close">×</button>
         </div>
@@ -101,17 +90,25 @@ export function OutlookImportDialog({
               {activities.map((activity) => <option key={activity.id} value={activity.id}>{activity.name}</option>)}
             </select>
           </label>
-          <input ref={inputRef} className="hidden-file-input" type="file" accept=".ics,text/calendar" onChange={browserFile} />
-          <button className="secondary-button file-picker" type="button" onClick={() => chooseFile().catch((cause) => setMessage(String(cause)))}>
-            {fileName || "Choose Outlook .ics file"}
-          </button>
+          <label>
+            <span>Outlook .ics subscription links (one per line)</span>
+            <textarea
+              className="calendar-links-input"
+              value={urls}
+              onChange={(event) => setUrls(event.target.value)}
+              placeholder={"https://outlook.office365.com/owa/calendar/…/calendar.ics\nhttps://outlook.live.com/owa/calendar/…/calendar.ics"}
+              rows={4}
+              required
+            />
+          </label>
+          <p className="form-help">The links are remembered on this device and excluded from portable backups.</p>
 
           {message && <p className="export-message" role="status">{message}</p>}
           <div className="dialog-actions">
             <span />
             <span />
             <button className="secondary-button" type="button" onClick={onClose}>Close</button>
-            <button className="primary-button" type="submit" disabled={importing || !contents}>
+            <button className="primary-button" type="submit" disabled={importing || !urls.trim()}>
               {importing ? "Importing…" : "Import events"}
             </button>
           </div>
