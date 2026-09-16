@@ -390,6 +390,7 @@ export default function App() {
               <WeeklyCalendar
                 weekStart={weekStart}
                 entries={entries}
+                activities={activities}
                 armedActivity={armedActivity}
                 dayNames={dayNames}
                 startHour={startHour}
@@ -440,6 +441,7 @@ export default function App() {
               <WeeklyCalendar
                 weekStart={TEMPLATE_WEEK}
                 entries={templateBlocks}
+                activities={activities}
                 armedActivity={armedActivity}
                 showDates={false}
                 showNow={false}

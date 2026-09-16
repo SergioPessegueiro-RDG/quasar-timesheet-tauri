@@ -75,8 +75,14 @@ export function Sidebar({
                       <button
                         className={`activity-row${armed ? " is-armed" : ""}`}
                         type="button"
+                        draggable
                         aria-pressed={armed}
                         onClick={() => onArm(armed ? null : activity)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "copy";
+                          event.dataTransfer.setData("application/x-quasar-activity-id", String(activity.id));
+                          event.dataTransfer.setData("text/plain", activity.name);
+                        }}
                       >
                         <span className="activity-accent" style={{ background: activity.color }} />
                         <span className="activity-copy">

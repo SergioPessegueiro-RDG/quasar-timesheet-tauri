@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   useMemo,
   useRef,
@@ -27,6 +28,7 @@ import { durationMinutes, toMinutes, toTime } from "../lib/types";
 interface WeeklyCalendarProps {
   weekStart: Date;
   entries: TimeEntry[];
+  activities: Activity[];
   armedActivity: Activity | null;
   showDates?: boolean;
   showNow?: boolean;
@@ -85,6 +87,7 @@ function hourLabel(hour: number): string {
 export function WeeklyCalendar({
   weekStart,
   entries,
+  activities,
   armedActivity,
   showDates = true,
   showNow = true,
@@ -101,6 +104,7 @@ export function WeeklyCalendar({
   const dragRef = useRef<DragState | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [activityDragOver, setActivityDragOver] = useState(false);
   const totalMinutes = (endHour - startHour) * 60;
   const dayCount = dayNames.length;
   const relativeMinute = (time: string) => toMinutes(time) - startHour * 60;
@@ -119,7 +123,7 @@ export function WeeklyCalendar({
     setDrag(next);
   }
 
-  function point(event: ReactPointerEvent): { day: number; minute: number } {
+  function point(event: { clientX: number; clientY: number }): { day: number; minute: number } {
     const rect = lanesRef.current!.getBoundingClientRect();
     const x = Math.max(0, Math.min(rect.width - 1, event.clientX - rect.left));
     const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
@@ -127,6 +131,23 @@ export function WeeklyCalendar({
       day: Math.max(0, Math.min(dayCount - 1, Math.floor((x / rect.width) * dayCount))),
       minute: snapMinute((y / rect.height) * totalMinutes, totalMinutes),
     };
+  }
+
+  async function dropActivity(event: ReactDragEvent<HTMLDivElement>) {
+    setActivityDragOver(false);
+    const activityId = Number(event.dataTransfer.getData("application/x-quasar-activity-id"));
+    const activity = activities.find(({ id }) => id === activityId);
+    if (!activity) return;
+    event.preventDefault();
+    const pointInGrid = point(event);
+    const start = Math.min(pointInGrid.minute, totalMinutes - SLOT_MINUTES);
+    const end = Math.min(totalMinutes, start + (activity.defaultDurationMinutes ?? SLOT_MINUTES));
+    await onQuickCreate(
+      activity,
+      dateKeys[pointInGrid.day],
+      fullTime(start),
+      fullTime(end),
+    );
   }
 
   function beginGridDrag(event: ReactPointerEvent<HTMLDivElement>) {
@@ -333,6 +354,7 @@ export function WeeklyCalendar({
 
   return (
     <section className="calendar-card" aria-label="Weekly timesheet" style={calendarStyle}>
+      <div className="calendar-scroll">
       <div className="calendar-header">
         <div className="time-gutter header-gutter" />
         {dates.map((date, index) => (
@@ -343,7 +365,6 @@ export function WeeklyCalendar({
         ))}
       </div>
 
-      <div className="calendar-scroll">
         <div className="calendar-grid">
           <div className="time-gutter time-labels" aria-hidden="true">
             {Array.from({ length: endHour - startHour + 1 }, (_, index) => (
@@ -357,7 +378,7 @@ export function WeeklyCalendar({
           </div>
 
           <div
-            className="day-lanes"
+            className={`day-lanes${activityDragOver ? " is-drop-target" : ""}`}
             ref={lanesRef}
             role="grid"
             aria-label={`${dayNames[0]} to ${dayNames[dayNames.length - 1]} time grid`}
@@ -367,6 +388,19 @@ export function WeeklyCalendar({
             onPointerUp={finishDrag}
             onPointerCancel={() => setDragState(null)}
             onKeyDown={handleKeyDown}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("application/x-quasar-activity-id")) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                setActivityDragOver(true);
+              }
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setActivityDragOver(false);
+              }
+            }}
+            onDrop={dropActivity}
           >
             {dates.map((_, dayIndex) => {
               const dayEntries = entriesByDay[dayIndex];
@@ -425,7 +459,6 @@ export function WeeklyCalendar({
             })}
           </div>
         </div>
-      </div>
 
       <div className="calendar-totals">
         <div className="time-gutter">Total</div>
@@ -434,6 +467,7 @@ export function WeeklyCalendar({
             {(dayEntries.reduce((sum, entry) => sum + durationMinutes(entry), 0) / 60).toFixed(1)}h
           </div>
         ))}
+      </div>
       </div>
     </section>
   );
