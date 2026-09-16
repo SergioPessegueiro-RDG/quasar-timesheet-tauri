@@ -85,6 +85,11 @@ const MIGRATIONS: string[][] = [
   [
     `DELETE FROM time_entries WHERE external_source = 'outlook'`,
   ],
+  [
+    `CREATE UNIQUE INDEX idx_time_entries_jira_worklog
+       ON time_entries(jira_worklog_id)
+       WHERE jira_worklog_id IS NOT NULL`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

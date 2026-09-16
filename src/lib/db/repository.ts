@@ -1,4 +1,5 @@
 import { DEFAULT_JIRA_PROJECT, FALLBACK_COLOR, PROJECT_COLORS } from "../constants";
+import { jiraWorklogTimes, type JiraIssue, type JiraWorklog } from "../jira";
 import type { Activity, Project, TemplateEntry, TimeEntry } from "../types";
 import { database } from "./index";
 
@@ -149,6 +150,101 @@ export async function addActivity(
     ],
   );
   return result.lastInsertId;
+}
+
+export async function syncJiraData(
+  issues: JiraIssue[],
+  worklogs: JiraWorklog[],
+): Promise<{ activitiesCreated: number; worklogsCreated: number; worklogsUpdated: number }> {
+  const db = await database();
+  const projectRows = await db.select<{ id: number }>(
+    "SELECT id FROM projects WHERE name = $1 LIMIT 1",
+    [DEFAULT_JIRA_PROJECT],
+  );
+  const projectId = projectRows[0]?.id ?? await addProject(DEFAULT_JIRA_PROJECT);
+  const allIssues = new Map<string, JiraIssue>();
+  for (const issue of issues) allIssues.set(issue.key, issue);
+  for (const worklog of worklogs) allIssues.set(worklog.issue.key, worklog.issue);
+  const activityIds = new Map<string, number>();
+  let activitiesCreated = 0;
+  let worklogsCreated = 0;
+  let worklogsUpdated = 0;
+
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    for (const issue of allIssues.values()) {
+      const existing = await db.select<{ id: number }>(
+        "SELECT id FROM activities WHERE jira_key = $1 COLLATE NOCASE LIMIT 1",
+        [issue.key],
+      );
+      let activityId = existing[0]?.id;
+      if (activityId) {
+        await db.execute(
+          `UPDATE activities
+              SET name = $1, jira_project = $2, issue_type = $3, archived = 0
+            WHERE id = $4`,
+          [issue.summary, DEFAULT_JIRA_PROJECT, issue.issueType, activityId],
+        );
+      } else {
+        const result = await db.execute(
+          `INSERT INTO activities
+              (name, jira_key, default_duration_minutes, archived, project_id,
+               jira_project, issue_type, created_at)
+           VALUES ($1, $2, 30, 0, $3, $4, $5, $6)`,
+          [issue.summary, issue.key, projectId, DEFAULT_JIRA_PROJECT, issue.issueType, now()],
+        );
+        activityId = result.lastInsertId;
+        activitiesCreated++;
+      }
+      activityIds.set(issue.key, activityId);
+    }
+
+    for (const worklog of worklogs) {
+      const activityId = activityIds.get(worklog.issue.key);
+      if (!activityId) continue;
+      const times = jiraWorklogTimes(worklog.started, worklog.timeSpentSeconds);
+      const existing = await db.select<{ id: number }>(
+        "SELECT id FROM time_entries WHERE jira_worklog_id = $1 LIMIT 1",
+        [worklog.id],
+      );
+      if (existing[0]) {
+        await db.execute(
+          `UPDATE time_entries
+              SET activity_id = $1, activity_label = $2, date = $3,
+                  start_time = $4, end_time = $5, notes = $6, jira_key = $7,
+                  jira_project = $8, issue_type = $9, updated_at = $10,
+                  external_source = 'jira', external_id = $11
+            WHERE id = $12`,
+          [
+            activityId, worklog.issue.summary, times.date, times.startTime, times.endTime,
+            worklog.notes, worklog.issue.key, DEFAULT_JIRA_PROJECT, worklog.issue.issueType,
+            now(), worklog.id, existing[0].id,
+          ],
+        );
+        worklogsUpdated++;
+      } else {
+        const timestamp = now();
+        await db.execute(
+          `INSERT INTO time_entries
+              (activity_id, activity_label, date, start_time, end_time, notes,
+               jira_key, jira_project, issue_type, created_at, updated_at,
+               external_source, external_id, jira_worklog_id, jira_uploaded_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, 'jira', $11, $11, $10)`,
+          [
+            activityId, worklog.issue.summary, times.date, times.startTime, times.endTime,
+            worklog.notes, worklog.issue.key, DEFAULT_JIRA_PROJECT,
+            worklog.issue.issueType, timestamp, worklog.id,
+          ],
+        );
+        worklogsCreated++;
+      }
+    }
+    await db.execute("COMMIT");
+  } catch (cause) {
+    await db.execute("ROLLBACK");
+    throw cause;
+  }
+  return { activitiesCreated, worklogsCreated, worklogsUpdated };
 }
 
 export async function updateActivity(activity: Omit<Activity, "color">): Promise<void> {

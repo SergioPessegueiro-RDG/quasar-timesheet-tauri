@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-// @ts-expect-error type error without @types/node package
+import { Buffer } from "node:buffer";
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 const outlookHosts = new Set([
@@ -48,6 +48,54 @@ export default defineConfig(() => ({
           } catch (cause) {
             response.statusCode = 502;
             response.end(cause instanceof Error ? cause.message : "Outlook calendar request failed.");
+          }
+        });
+      },
+    },
+    {
+      name: "jira-api-development-proxy",
+      configureServer(server) {
+        server.middlewares.use("/__jira_api", async (request, response) => {
+          try {
+            const value = new URL(request.url ?? "", "http://localhost").searchParams.get("url");
+            const target = new URL(value ?? "");
+            if (
+              !["GET", "POST"].includes(request.method ?? "")
+              || target.protocol !== "https:"
+              || !target.hostname.toLowerCase().endsWith(".atlassian.net")
+              || !target.pathname.startsWith("/rest/api/3/")
+              || target.username
+              || target.password
+            ) {
+              response.statusCode = 400;
+              return response.end("Invalid Jira API request.");
+            }
+
+            const chunks: Buffer[] = [];
+            for await (const chunk of request) chunks.push(Buffer.from(chunk));
+            const body = Buffer.concat(chunks);
+            const upstream = await fetch(target, {
+              method: request.method,
+              redirect: "error",
+              headers: {
+                Accept: "application/json",
+                ...(request.headers.authorization ? { Authorization: request.headers.authorization } : {}),
+                ...(request.headers["content-type"] ? { "Content-Type": request.headers["content-type"] } : {}),
+              },
+              body: body.length ? body : undefined,
+              signal: AbortSignal.timeout(30_000),
+            });
+            const contents = new Uint8Array(await upstream.arrayBuffer());
+            if (contents.byteLength > 10 * 1024 * 1024) {
+              response.statusCode = 413;
+              return response.end("Jira responses are limited to 10 MB.");
+            }
+            response.statusCode = upstream.status;
+            response.setHeader("Content-Type", upstream.headers.get("Content-Type") ?? "application/json");
+            response.end(contents);
+          } catch (cause) {
+            response.statusCode = 502;
+            response.end(cause instanceof Error ? cause.message : "Jira API request failed.");
           }
         });
       },
