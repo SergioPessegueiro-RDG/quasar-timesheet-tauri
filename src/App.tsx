@@ -451,6 +451,10 @@ export default function App() {
     }, 0) / 60,
     [entries],
   );
+  const hasPendingJiraEntries = useMemo(
+    () => entries.some((entry) => Boolean(entry.jiraKey && !entry.jiraWorklogId)),
+    [entries],
+  );
 
   if (error) {
     return (
@@ -546,8 +550,13 @@ export default function App() {
                   <button type="button" aria-label="Next week" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
                 </div>
                 <button className="secondary-button toolbar-button" type="button" onClick={applyTemplate}>Apply template</button>
-                <button className="secondary-button toolbar-button jira-button" type="button" onClick={uploadCurrentWeekToJira} disabled={jiraUploading}>
-                  <JiraMark /> {jiraUploading ? "Uploading…" : "Upload Jira"}
+                <button
+                  className="secondary-button toolbar-button jira-button"
+                  type="button"
+                  onClick={uploadCurrentWeekToJira}
+                  disabled={jiraUploading || !hasPendingJiraEntries}
+                >
+                  <JiraMark /> {jiraUploading ? "Uploading…" : hasPendingJiraEntries ? "Upload to Jira" : "Synced"}
                 </button>
               </div>
             )}
