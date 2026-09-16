@@ -1,4 +1,5 @@
-import type { Activity, Project } from "../lib/types";
+import { useState } from "react";
+import { activityMatchesQuery, type Activity, type Project } from "../lib/types";
 
 interface SidebarProps {
   projects: Project[];
@@ -28,6 +29,9 @@ export function Sidebar({
   onEditActivity,
   onEditProject,
 }: SidebarProps) {
+  const [query, setQuery] = useState("");
+  const matchingActivities = activities.filter((activity) => activityMatchesQuery(activity, query));
+
   return (
     <aside className="sidebar" aria-label="Activities">
       <div className="sidebar-heading">
@@ -38,9 +42,20 @@ export function Sidebar({
         <button className="icon-button" type="button" aria-label="Add activity" title="Add activity" onClick={onAddActivity}>+</button>
       </div>
 
+      <label className="activity-search">
+        <span className="visually-hidden">Filter activities by QDM name or number</span>
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search QDM name or number…"
+        />
+      </label>
+
       <div className="project-list">
         {projects.map((project) => {
-          const children = activities.filter((activity) => activity.projectId === project.id);
+          const children = matchingActivities.filter((activity) => activity.projectId === project.id);
+          if (!children.length && query.trim()) return null;
           return (
             <section className="project-group" key={project.id}>
               <div className="project-heading-wrap">
@@ -50,9 +65,10 @@ export function Sidebar({
                 aria-expanded={!project.collapsed}
                 onClick={() => onToggleProject(project)}
               >
-                <span className="project-chevron" aria-hidden="true">
-                  {project.collapsed ? "›" : "⌄"}
-                </span>
+                <span
+                  className={`project-chevron${project.collapsed ? " is-collapsed" : ""}`}
+                  aria-hidden="true"
+                />
                 <span className="color-dot" style={{ background: project.color }} />
                 <span>{project.name}</span>
                 <span className="project-count">{children.length}</span>
@@ -66,7 +82,7 @@ export function Sidebar({
               >•••</button>
               </div>
 
-              {!project.collapsed && (
+              {(!project.collapsed || Boolean(query.trim())) && (
                 <div className="activity-list">
                   {children.map((activity) => {
                     const armed = armedActivity?.id === activity.id;
@@ -110,6 +126,9 @@ export function Sidebar({
             </section>
           );
         })}
+        {query.trim() && !matchingActivities.length && (
+          <p className="activity-search-empty">No matching QDMs</p>
+        )}
       </div>
 
       <div className={`armed-status${armedActivity ? " is-active" : ""}`}>

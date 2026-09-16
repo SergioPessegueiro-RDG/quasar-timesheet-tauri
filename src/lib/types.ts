@@ -75,6 +75,15 @@ export function isJiraSyncPending(
   return Boolean(entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty));
 }
 
+export function activityMatchesQuery(
+  activity: Pick<Activity, "name" | "jiraKey">,
+  query: string,
+): boolean {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return true;
+  return `${activity.name} ${activity.jiraKey ?? ""}`.toLocaleLowerCase().includes(needle);
+}
+
 export function isTimeEntry(block: AnyBlock): block is TimeEntry {
   return "date" in block;
 }

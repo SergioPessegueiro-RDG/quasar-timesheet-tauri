@@ -7,6 +7,7 @@ import {
 } from "../lib/constants";
 import type { JiraTransition } from "../lib/jira";
 import type { Activity, TimeEntry } from "../lib/types";
+import { ActivityPicker } from "./ActivityPicker";
 import { JiraStatusControl } from "./JiraStatusControl";
 
 export interface TimeBlockDraft {
@@ -72,16 +73,31 @@ export function TimeBlockDialog({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  function changeActivity(nextId: number) {
-    setActivityId(nextId);
-    const activity = activities.find(({ id }) => id === nextId);
+  function changeActivity(activity: Activity | null) {
+    setActivityId(activity?.id ?? 0);
+    if (!activity) return;
     setJiraKey(jiraKeyNumber(activity?.jiraKey));
+    setJiraProject(activity.jiraProject || DEFAULT_JIRA_PROJECT);
+  }
+
+  function changeJiraKey(value: string) {
+    setJiraKey(value);
+    const fullKey = jiraKeyFromNumber(value)?.toUpperCase();
+    const activity = activities.find((candidate) => candidate.jiraKey?.toUpperCase() === fullKey);
+    if (activity) {
+      setActivityId(activity.id);
+      setJiraProject(activity.jiraProject || DEFAULT_JIRA_PROJECT);
+    }
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!activities.some(({ id }) => id === activityId)) {
       setError("Please choose an activity.");
+      return;
+    }
+    if (fullJiraKey && selectedActivity?.jiraKey?.toUpperCase() !== fullJiraKey) {
+      setError(`Choose the activity linked to ${fullJiraKey}.`);
       return;
     }
     if (startTime >= endTime) {
@@ -126,11 +142,14 @@ export function TimeBlockDialog({
         <form onSubmit={submit}>
           <label>
             <span>Activity</span>
-            <select value={activityId} onChange={(event) => changeActivity(Number(event.target.value))} autoFocus>
-              {activities.map((activity) => (
-                <option value={activity.id} key={activity.id}>{activity.name}</option>
-              ))}
-            </select>
+            <ActivityPicker
+              activities={activities}
+              value={activityId || null}
+              onChange={changeActivity}
+              ariaLabel="Activity"
+              placeholder="Search QDM name or number…"
+              autoFocus
+            />
           </label>
 
           <div className="form-row">
@@ -150,7 +169,7 @@ export function TimeBlockDialog({
               <span>Jira issue key</span>
               <div className="prefixed-input">
                 <b>{JIRA_KEY_PREFIX}</b>
-                <input value={jiraKey} onChange={(event) => setJiraKey(event.target.value)} inputMode="numeric" />
+                <input value={jiraKey} onChange={(event) => changeJiraKey(event.target.value)} inputMode="numeric" />
               </div>
             </label>
           </div>

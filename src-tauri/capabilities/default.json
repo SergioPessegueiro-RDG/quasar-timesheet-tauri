@@ -9,6 +9,8 @@
     "sql:default",
     "dialog:default",
     "fs:default",
+    "process:default",
+    "updater:default",
     {
       "identifier": "http:default",
       "allow": [

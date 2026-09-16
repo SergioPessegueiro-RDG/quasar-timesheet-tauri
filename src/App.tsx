@@ -11,6 +11,7 @@ import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDial
 import { TimerBar } from "./components/TimerBar";
 import { WeeklyCalendar } from "./components/WeeklyCalendar";
 import { isTauri } from "./lib/db";
+import { checkForAppUpdate } from "./lib/updater";
 import {
   addTimeEntry,
   addTemplateEntry,
@@ -192,6 +193,12 @@ export default function App() {
         ? { ...activity, jiraStatus: transition.status }
         : activity
     )));
+  }, []);
+
+  useEffect(() => {
+    void checkForAppUpdate().catch((cause) => {
+      console.warn("Update check failed", cause);
+    });
   }, []);
 
   useEffect(() => {
