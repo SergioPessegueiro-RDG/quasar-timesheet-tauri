@@ -40,14 +40,24 @@ export function parseOutlookFeedList(value: string): string[] {
   return [...new Set(links.map(outlookFeedUrl))];
 }
 
+export function outlookRequestUrl(value: string, native: boolean, development: boolean): string {
+  const safeUrl = outlookFeedUrl(value);
+  return !native && development
+    ? `/__outlook_feed?url=${encodeURIComponent(safeUrl)}`
+    : safeUrl;
+}
+
 export async function fetchOutlookFeed(url: string, fetcher?: typeof fetch): Promise<string> {
   const safeUrl = outlookFeedUrl(url);
   const native = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
   const request = fetcher ?? (native ? (await import("@tauri-apps/plugin-http")).fetch : fetch);
+  const requestUrl = fetcher
+    ? safeUrl
+    : outlookRequestUrl(safeUrl, native, import.meta.env?.DEV === true);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await request(safeUrl, {
+    const response = await request(requestUrl, {
       signal: controller.signal,
       redirect: "error",
       headers: { Accept: "text/calendar" },
@@ -58,6 +68,9 @@ export async function fetchOutlookFeed(url: string, fetcher?: typeof fetch): Pro
     const text = await response.text();
     if (new Blob([text]).size > MAX_ICS_BYTES) throw new Error("Calendar feeds are limited to 5 MB.");
     return text;
+  } catch (cause) {
+    if (controller.signal.aborted) throw new Error("The Outlook calendar request timed out.");
+    throw cause;
   } finally {
     clearTimeout(timeout);
   }

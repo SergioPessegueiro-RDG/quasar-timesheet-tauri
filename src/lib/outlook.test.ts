@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   fetchOutlookFeed,
   outlookFeedUrl,
+  outlookRequestUrl,
   parseOutlookFeedList,
   parseOutlookIcs,
 } from "./outlook.ts";
@@ -78,6 +79,16 @@ test("Outlook subscriptions normalize, deduplicate, and limit saved links", () =
       (_, index) => `https://outlook.live.com/owa/calendar/${index}/calendar.ics`,
     ).join("\n")),
     /up to 10/,
+  );
+});
+
+test("browser development routes Outlook feeds through the local proxy", () => {
+  const feed = "https://outlook.office365.com/owa/calendar/id/calendar.ics";
+  assert.equal(outlookRequestUrl(feed, true, true), feed);
+  assert.equal(outlookRequestUrl(feed, false, false), feed);
+  assert.equal(
+    outlookRequestUrl(feed, false, true),
+    `/__outlook_feed?url=${encodeURIComponent(feed)}`,
   );
 });
 
