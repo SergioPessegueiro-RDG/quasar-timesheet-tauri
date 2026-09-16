@@ -4,6 +4,7 @@ import { ActivityDialog, type ActivityDraft } from "./components/ActivityDialog"
 import { ProjectDialog } from "./components/ProjectDialog";
 import { SettingsDialog, type ThemeMode } from "./components/SettingsDialog";
 import { ExportDialog } from "./components/ExportDialog";
+import { OutlookImportDialog } from "./components/OutlookImportDialog";
 import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
 import { TimerBar } from "./components/TimerBar";
@@ -83,6 +84,7 @@ export default function App() {
   const [view, setView] = useState<View>("timesheet");
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [outlookImportOpen, setOutlookImportOpen] = useState(false);
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
   const [projectEditor, setProjectEditor] = useState<Project | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -374,6 +376,7 @@ export default function App() {
                   <button type="button" aria-label="Next week" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
                 </div>
                 <button className="secondary-button toolbar-button" type="button" onClick={applyTemplate}>Apply template</button>
+                <button className="secondary-button toolbar-button" type="button" onClick={() => setOutlookImportOpen(true)}>Import Outlook</button>
                 <button className="primary-button" type="button" onClick={() => setExportOpen(true)}>Export CSV</button>
               </div>
             )}
@@ -584,6 +587,16 @@ export default function App() {
           initialStart={isoDate(weekStart)}
           initialEnd={isoDate(addDays(weekStart, showWeekends ? 6 : 4))}
           onClose={() => setExportOpen(false)}
+        />
+      )}
+
+      {outlookImportOpen && (
+        <OutlookImportDialog
+          activities={activities}
+          initialStart={isoDate(weekStart)}
+          initialEnd={isoDate(addDays(weekStart, showWeekends ? 6 : 4))}
+          onImported={loadEntries}
+          onClose={() => setOutlookImportOpen(false)}
         />
       )}
     </div>

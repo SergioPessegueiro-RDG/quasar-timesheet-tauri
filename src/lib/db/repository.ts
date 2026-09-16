@@ -1,4 +1,5 @@
 import { DEFAULT_JIRA_PROJECT, FALLBACK_COLOR, PROJECT_COLORS } from "../constants";
+import type { OutlookEvent } from "../outlook";
 import type { Activity, Project, TemplateEntry, TimeEntry } from "../types";
 import { database } from "./index";
 
@@ -226,6 +227,46 @@ export async function addTimeEntry(entry: NewTimeEntry): Promise<number> {
     ],
   );
   return result.lastInsertId;
+}
+
+export async function importOutlookEvents(
+  activity: Activity,
+  events: OutlookEvent[],
+): Promise<{ created: number; skippedDuplicates: number }> {
+  const db = await database();
+  const timestamp = now();
+  let created = 0;
+  await db.execute("BEGIN IMMEDIATE");
+  try {
+    for (const event of events) {
+      const result = await db.execute(
+        `INSERT OR IGNORE INTO time_entries
+          (activity_id, activity_label, date, start_time, end_time, notes,
+           jira_key, jira_project, issue_type, created_at, updated_at,
+           external_source, external_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, 'outlook', $11)`,
+        [
+          activity.id,
+          activity.name,
+          event.date,
+          event.startTime,
+          event.endTime,
+          [event.title, event.notes].filter(Boolean).join("\n"),
+          activity.jiraKey,
+          activity.jiraProject,
+          activity.issueType,
+          timestamp,
+          event.externalId,
+        ],
+      );
+      created += result.rowsAffected;
+    }
+    await db.execute("COMMIT");
+  } catch (cause) {
+    await db.execute("ROLLBACK");
+    throw cause;
+  }
+  return { created, skippedDuplicates: events.length - created };
 }
 
 /** Used by every drag, resize and cross-day move, so it stays deliberately narrow. */

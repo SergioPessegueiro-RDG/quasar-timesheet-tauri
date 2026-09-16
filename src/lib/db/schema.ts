@@ -71,6 +71,13 @@ const MIGRATIONS: string[][] = [
     `CREATE INDEX idx_time_entries_date ON time_entries(date)`,
     `CREATE INDEX idx_activities_project ON activities(project_id)`,
   ],
+  [
+    `ALTER TABLE time_entries ADD COLUMN external_source TEXT`,
+    `ALTER TABLE time_entries ADD COLUMN external_id TEXT`,
+    `CREATE UNIQUE INDEX idx_time_entries_external
+       ON time_entries(external_source, external_id)
+       WHERE external_id IS NOT NULL`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
