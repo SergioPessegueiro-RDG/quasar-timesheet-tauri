@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getSetting, setSetting } from "../lib/db/repository";
-import { jiraCloudUrl } from "../lib/jira";
+import { jiraCloudUrl, testJiraConnection, type JiraCredentials } from "../lib/jira";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -13,6 +13,7 @@ interface SettingsDialogProps {
   onClose: () => void;
   onExportCsv: () => void;
   onImportOutlook: () => void;
+  onSyncJira: (credentials: JiraCredentials) => Promise<string>;
   onSave: (
     theme: ThemeMode,
     showTimer: boolean,
@@ -31,6 +32,7 @@ export function SettingsDialog({
   onClose,
   onExportCsv,
   onImportOutlook,
+  onSyncJira,
   onSave,
 }: SettingsDialogProps) {
   const [theme, setTheme] = useState(initialTheme);
@@ -43,6 +45,7 @@ export function SettingsDialog({
   const [jiraApiToken, setJiraApiToken] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [jiraAction, setJiraAction] = useState<"test" | "sync" | null>(null);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -62,20 +65,54 @@ export function SettingsDialog({
     }).catch((cause) => setMessage(cause instanceof Error ? cause.message : String(cause)));
   }, []);
 
+  function currentJiraCredentials(): JiraCredentials | null {
+    const hasAnyJiraDetails = jiraBaseUrl.trim() || jiraEmail.trim() || jiraApiToken;
+    if (hasAnyJiraDetails && (!jiraBaseUrl.trim() || !jiraEmail.trim() || !jiraApiToken)) {
+      throw new Error("Complete all three Jira connection fields, or leave all three empty.");
+    }
+    return hasAnyJiraDetails ? {
+      baseUrl: jiraCloudUrl(jiraBaseUrl),
+      email: jiraEmail.trim(),
+      apiToken: jiraApiToken,
+    } : null;
+  }
+
+  async function saveJiraCredentials(credentials: JiraCredentials | null) {
+    await Promise.all([
+      setSetting("jira_base_url", credentials?.baseUrl ?? ""),
+      setSetting("jira_email", credentials?.email ?? ""),
+      setSetting("jira_api_token", credentials?.apiToken ?? ""),
+    ]);
+  }
+
+  async function runJiraAction(action: "test" | "sync") {
+    setJiraAction(action);
+    setMessage("");
+    try {
+      const credentials = currentJiraCredentials();
+      if (!credentials) throw new Error("Add your Jira connection details first.");
+      if (action === "test") {
+        const user = await testJiraConnection(credentials);
+        setMessage(`Connected to Jira as ${user.displayName}.`);
+      } else {
+        await saveJiraCredentials(credentials);
+        setMessage(await onSyncJira(credentials));
+      }
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setJiraAction(null);
+    }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (endHour <= startHour) return setMessage("The work day must end after it starts.");
-    const hasAnyJiraDetails = jiraBaseUrl.trim() || jiraEmail.trim() || jiraApiToken;
-    if (hasAnyJiraDetails && (!jiraBaseUrl.trim() || !jiraEmail.trim() || !jiraApiToken)) {
-      return setMessage("Complete all three Jira connection fields, or leave all three empty.");
-    }
     setBusy(true);
     try {
-      const normalizedJiraUrl = hasAnyJiraDetails ? jiraCloudUrl(jiraBaseUrl) : "";
+      const credentials = currentJiraCredentials();
       await Promise.all([
-        setSetting("jira_base_url", normalizedJiraUrl),
-        setSetting("jira_email", jiraEmail.trim()),
-        setSetting("jira_api_token", jiraApiToken),
+        saveJiraCredentials(credentials),
         onSave(theme, showTimer, startHour, endHour, showWeekends),
       ]);
       onClose();
@@ -158,7 +195,7 @@ export function SettingsDialog({
         <section className="settings-section jira-settings">
           <div>
             <strong>Jira connection</strong>
-            <p>Stored on this device and used when you press Upload Jira.</p>
+            <p>Syncs open QDMs assigned to you and your Jira worklogs for the visible week.</p>
           </div>
           <label>
             <span>Jira site</span>
@@ -172,6 +209,24 @@ export function SettingsDialog({
             <span>API token</span>
             <input type="password" value={jiraApiToken} onChange={(event) => setJiraApiToken(event.target.value)} autoComplete="current-password" />
           </label>
+          <div className="jira-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={busy || jiraAction !== null}
+              onClick={() => void runJiraAction("test")}
+            >
+              {jiraAction === "test" ? "Testing…" : "Test connection"}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={busy || jiraAction !== null}
+              onClick={() => void runJiraAction("sync")}
+            >
+              {jiraAction === "sync" ? "Syncing…" : "Sync now"}
+            </button>
+          </div>
         </section>
 
         <section className="settings-section settings-action-section">
@@ -195,7 +250,7 @@ export function SettingsDialog({
           <span />
           <span />
           <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" type="submit" disabled={busy}>{busy ? "Working…" : "Save settings"}</button>
+          <button className="primary-button" type="submit" disabled={busy || jiraAction !== null}>{busy ? "Working…" : "Save settings"}</button>
         </footer>
       </form>
     </div>

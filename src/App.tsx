@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { ActivityDialog, type ActivityDraft } from "./components/ActivityDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
@@ -32,12 +32,19 @@ import {
   moveTimeEntry,
   setProjectCollapsed,
   setSetting,
+  syncJiraData,
   updateTemplateEntry,
   updateActivity,
   updateProject,
   updateTimeEntry,
 } from "./lib/db/repository";
-import { uploadJiraWorklog } from "./lib/jira";
+import {
+  fetchAssignedJiraIssues,
+  fetchJiraWorklogs,
+  testJiraConnection,
+  uploadJiraWorklog,
+  type JiraCredentials,
+} from "./lib/jira";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
 import {
   DEFAULT_END_HOUR,
@@ -98,6 +105,7 @@ export default function App() {
   const [outlookGuideMessage, setOutlookGuideMessage] = useState("");
   const [jiraUploading, setJiraUploading] = useState(false);
   const [jiraUploadMessage, setJiraUploadMessage] = useState("");
+  const [jiraSyncMessage, setJiraSyncMessage] = useState("");
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
   const [projectEditor, setProjectEditor] = useState<Project | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -108,6 +116,7 @@ export default function App() {
   const [showWeekends, setShowWeekends] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const jiraAutoSyncStarted = useRef(false);
 
   const loadEntries = useCallback(async () => {
     const end = addDays(weekStart, showWeekends ? 6 : 4);
@@ -186,6 +195,12 @@ export default function App() {
     void loadOutlookGuides();
   }, [loadOutlookGuides]);
 
+  useEffect(() => {
+    if (loading || jiraAutoSyncStarted.current) return;
+    jiraAutoSyncStarted.current = true;
+    void syncJira(undefined, true);
+  }, [loading]);
+
   async function toggleProject(project: Project) {
     await setProjectCollapsed(project.id, !project.collapsed);
     setProjects((current) => current.map((item) => (
@@ -200,6 +215,39 @@ export default function App() {
     setArmedActivity((current) => (
       current ? nextActivities.find(({ id }) => id === current.id) ?? null : null
     ));
+  }
+
+  async function syncJira(credentials?: JiraCredentials, silentIfMissing = false): Promise<string> {
+    try {
+      const saved = credentials ?? {
+        baseUrl: await getSetting("jira_base_url") ?? "",
+        email: await getSetting("jira_email") ?? "",
+        apiToken: await getSetting("jira_api_token") ?? "",
+      };
+      if (!saved.baseUrl || !saved.email || !saved.apiToken) {
+        const message = "Complete the Jira connection in Settings first.";
+        if (!silentIfMissing) setJiraSyncMessage(message);
+        return message;
+      }
+
+      setJiraSyncMessage("Syncing Jira…");
+      const user = await testJiraConnection(saved);
+      const start = isoDate(weekStart);
+      const end = isoDate(addDays(weekStart, showWeekends ? 6 : 4));
+      const [issues, worklogs] = await Promise.all([
+        fetchAssignedJiraIssues(saved),
+        fetchJiraWorklogs(saved, user.accountId, start, end),
+      ]);
+      await syncJiraData(issues, worklogs);
+      await Promise.all([refreshWorkspace(), loadEntries()]);
+      const message = `Synced ${issues.length} QDM${issues.length === 1 ? "" : "s"} and ${worklogs.length} Jira worklog${worklogs.length === 1 ? "" : "s"}.`;
+      setJiraSyncMessage(message);
+      return message;
+    } catch (cause) {
+      const message = `Jira sync failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+      setJiraSyncMessage(message);
+      return message;
+    }
   }
 
   async function uploadCurrentWeekToJira() {
@@ -470,6 +518,7 @@ export default function App() {
           {view === "timesheet" ? (
             <>
               {outlookGuideMessage && <p className="integration-message" role="status">{outlookGuideMessage}</p>}
+              {jiraSyncMessage && <p className="integration-message" role="status">{jiraSyncMessage}</p>}
               {jiraUploadMessage && <p className="integration-message" role="status">{jiraUploadMessage}</p>}
               <div className={`placement-hint${armedActivity ? " is-active" : ""}`} role="status">
                 <span>{armedActivity ? "＋" : "↖"}</span>
@@ -631,6 +680,7 @@ export default function App() {
             setSettingsOpen(false);
             setOutlookImportOpen(true);
           }}
+          onSyncJira={syncJira}
           onSave={async (
             nextTheme,
             nextShowTimer,

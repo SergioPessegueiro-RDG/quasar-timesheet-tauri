@@ -1399,6 +1399,16 @@ button:focus-visible {
   grid-column: 1 / -1;
 }
 
+.jira-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.jira-actions button {
+  min-width: 108px;
+}
+
 .settings-action-section {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
