@@ -4,7 +4,7 @@ import type { Activity } from "../lib/types";
 
 interface TimerBarProps {
   activities: Activity[];
-  onLog: (activity: Activity, startedAt: Date, durationMinutes: number) => Promise<void>;
+  onFinish: (activity: Activity, startedAt: Date, durationMinutes: number) => void;
 }
 
 function elapsedLabel(milliseconds: number): string {
@@ -17,7 +17,7 @@ function elapsedLabel(milliseconds: number): string {
     : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function TimerBar({ activities, onLog }: TimerBarProps) {
+export function TimerBar({ activities, onFinish }: TimerBarProps) {
   const [activityId, setActivityId] = useState("");
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -42,12 +42,8 @@ export function TimerBar({ activities, onLog }: TimerBarProps) {
     const duration = roundTimerMinutes((Date.now() - startedAt.getTime()) / 60_000);
     setStartedAt(null);
     if (!activity || !duration) return setStatus("Timer stopped — nothing logged.");
-    try {
-      await onLog(activity, startedAt, duration);
-      setStatus(`Logged ${duration} min to ${activity.name}.`);
-    } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Could not log timer.");
-    }
+    onFinish(activity, startedAt, duration);
+    setStatus(`Timer stopped at ${duration} min — add a description to save.`);
   }
 
   return (
@@ -62,8 +58,14 @@ export function TimerBar({ activities, onLog }: TimerBarProps) {
         <option value="">Choose activity…</option>
         {activities.map((activity) => <option value={activity.id} key={activity.id}>{activity.name}</option>)}
       </select>
-      <button className={startedAt ? "danger-button" : "primary-button"} type="button" onClick={toggle}>
-        {startedAt ? "Stop & log" : "Start timer"}
+      <button
+        className={startedAt ? "timer-finish-button" : "primary-button"}
+        type="button"
+        onClick={toggle}
+        aria-label={startedAt ? "Stop timer and add work details" : undefined}
+        title={startedAt ? "Stop timer and add work details" : undefined}
+      >
+        {startedAt ? <span className="timer-stop-icon" aria-hidden="true" /> : "Start timer"}
       </button>
       <strong className="timer-elapsed">{startedAt ? elapsedLabel(now - startedAt.getTime()) : "00:00"}</strong>
       <span className="timer-status">{status || (startedAt ? "Tracking now" : "Rounds to the nearest 15 minutes")}</span>

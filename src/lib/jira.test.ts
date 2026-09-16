@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fetchAssignedJiraIssues,
+  fetchJiraTransitions,
   fetchJiraWorklogs,
   jiraCloudUrl,
   jiraWorklogTimes,
   testJiraConnection,
+  transitionJiraIssue,
   uploadJiraWorklog,
 } from "./jira.ts";
 import type { TimeEntry } from "./types.ts";
@@ -56,6 +58,19 @@ test("Jira URL validation blocks token exfiltration to arbitrary hosts", () => {
   assert.throws(() => jiraCloudUrl("https://atlassian.net.evil.example"), /HTTPS Jira Cloud/);
 });
 
+test("Jira upload requires a meaningful work description", async () => {
+  await assert.rejects(
+    uploadJiraWorklog({ ...entry, notes: "   " }, {
+      baseUrl: "https://example.atlassian.net",
+      email: "user@example.com",
+      apiToken: "secret-token",
+    }, async () => {
+      throw new Error("request should not be sent");
+    }),
+    /description is required/i,
+  );
+});
+
 test("Jira connection test returns the authenticated user", async () => {
   const user = await testJiraConnection({
     baseUrl: "https://example.atlassian.net",
@@ -90,12 +105,12 @@ test("Jira sync fetches assigned open QDMs and only the current user's worklogs"
       if (body.jql.includes("worklogAuthor")) {
         return Response.json({
           isLast: true,
-          issues: [{ id: "100", key: "QDM-100", fields: { summary: "Delivery planning", issuetype: { name: "Task" } } }],
+          issues: [{ id: "100", key: "QDM-100", fields: { summary: "Delivery planning", issuetype: { name: "Task" }, status: { name: "In Progress" } } }],
         });
       }
       return Response.json({
         isLast: true,
-        issues: [{ id: "100", key: "QDM-100", fields: { summary: "Delivery planning", issuetype: { name: "Task" } } }],
+        issues: [{ id: "100", key: "QDM-100", fields: { summary: "Delivery planning", issuetype: { name: "Task" }, status: { name: "In Progress" } } }],
       });
     }
     return Response.json({
@@ -139,6 +154,7 @@ test("Jira sync fetches assigned open QDMs and only the current user's worklogs"
     key: "QDM-100",
     summary: "Delivery planning",
     issueType: "Task",
+    status: "In Progress",
   }]);
   assert.deepEqual(worklogs, [{
     id: "501",
@@ -152,4 +168,33 @@ test("Jira sync fetches assigned open QDMs and only the current user's worklogs"
     .map(({ init }) => JSON.parse(String(init?.body)).jql);
   assert.ok(jqlBodies.some((jql) => jql.includes("assignee = currentUser()")));
   assert.ok(jqlBodies.some((jql) => jql.includes("worklogAuthor = currentUser()")));
+});
+
+test("Jira workflow transitions are listed and applied by transition ID", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const fetcher: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    return init?.method === "POST"
+      ? new Response(null, { status: 204 })
+      : Response.json({
+        transitions: [
+          { id: "21", name: "Start progress", to: { id: "3", name: "In Progress" } },
+          { id: "31", name: "Done", to: { id: "10001", name: "Done" } },
+        ],
+      });
+  };
+  const credentials = {
+    baseUrl: "https://example.atlassian.net",
+    email: "user@example.com",
+    apiToken: "secret-token",
+  };
+
+  assert.deepEqual(await fetchJiraTransitions(credentials, "QDM-100", fetcher), [
+    { id: "21", name: "Start progress", status: "In Progress" },
+    { id: "31", name: "Done", status: "Done" },
+  ]);
+  await transitionJiraIssue(credentials, "QDM-100", "31", fetcher);
+
+  assert.equal(requests[0].url, "https://example.atlassian.net/rest/api/3/issue/QDM-100/transitions");
+  assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { transition: { id: "31" } });
 });

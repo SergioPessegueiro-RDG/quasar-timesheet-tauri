@@ -27,6 +27,7 @@ export interface Activity {
   projectId: number;
   jiraProject: string | null;
   issueType: string | null;
+  jiraStatus?: string | null;
   /** Read-only, joined in from the owning Project. Never stored on the activity. */
   color: string;
 }
@@ -59,6 +60,12 @@ export interface TemplateEntry extends BlockBase {
 }
 
 export type AnyBlock = TimeEntry | TemplateEntry;
+
+export function requiredWorkDescription(value: string): string {
+  const description = value.trim();
+  if (!description) throw new Error("A work description is required.");
+  return description;
+}
 
 export function isTimeEntry(block: AnyBlock): block is TimeEntry {
   return "date" in block;

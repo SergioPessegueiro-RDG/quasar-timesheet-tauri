@@ -90,6 +90,9 @@ const MIGRATIONS: string[][] = [
        ON time_entries(jira_worklog_id)
        WHERE jira_worklog_id IS NOT NULL`,
   ],
+  [
+    `ALTER TABLE activities ADD COLUMN jira_status TEXT`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

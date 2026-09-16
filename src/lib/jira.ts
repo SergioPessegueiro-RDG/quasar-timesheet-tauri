@@ -17,6 +17,13 @@ export interface JiraIssue {
   key: string;
   summary: string;
   issueType: string;
+  status: string;
+}
+
+export interface JiraTransition {
+  id: string;
+  name: string;
+  status: string;
 }
 
 export interface JiraWorklog {
@@ -97,7 +104,7 @@ async function jiraJson<T>(
 function issueFromApi(value: {
   id?: string;
   key?: string;
-  fields?: { summary?: string; issuetype?: { name?: string } };
+  fields?: { summary?: string; issuetype?: { name?: string }; status?: { name?: string } };
 }): JiraIssue | null {
   if (!value.id || !value.key || !value.fields?.summary) return null;
   return {
@@ -105,6 +112,7 @@ function issueFromApi(value: {
     key: value.key,
     summary: value.fields.summary,
     issueType: value.fields.issuetype?.name ?? "Task",
+    status: value.fields.status?.name ?? "Unknown",
   };
 }
 
@@ -125,7 +133,7 @@ async function searchJiraIssues(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jql,
-        fields: ["summary", "issuetype"],
+        fields: ["summary", "issuetype", "status"],
         maxResults: 100,
         ...(nextPageToken ? { nextPageToken } : {}),
       }),
@@ -229,6 +237,53 @@ export async function fetchJiraWorklogs(
   return worklogs;
 }
 
+/**
+ * Sources:
+ * https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-get
+ * https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-post
+ */
+export async function fetchJiraTransitions(
+  credentials: JiraCredentials,
+  issueKey: string,
+  fetcher?: Fetcher,
+): Promise<JiraTransition[]> {
+  const key = issueKey.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) throw new Error("Invalid Jira issue key.");
+  const result = await jiraJson<{
+    transitions?: Array<{ id?: string; name?: string; to?: { name?: string } }>;
+  }>(`/rest/api/3/issue/${encodeURIComponent(key)}/transitions`, credentials, {}, fetcher);
+  return (result.transitions ?? []).flatMap((transition) => (
+    transition.id && transition.name && transition.to?.name
+      ? [{ id: transition.id, name: transition.name, status: transition.to.name }]
+      : []
+  ));
+}
+
+export async function transitionJiraIssue(
+  credentials: JiraCredentials,
+  issueKey: string,
+  transitionId: string,
+  fetcher?: Fetcher,
+): Promise<void> {
+  const key = issueKey.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]*-\d+$/.test(key)) throw new Error("Invalid Jira issue key.");
+  if (!/^\d+$/.test(transitionId)) throw new Error("Invalid Jira transition.");
+  const response = await jiraFetch(
+    `/rest/api/3/issue/${encodeURIComponent(key)}/transitions`,
+    credentials,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transition: { id: transitionId } }),
+    },
+    fetcher,
+  );
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Jira could not update ${key} (${response.status})${detail ? `: ${detail}` : "."}`);
+  }
+}
+
 function jiraStarted(entry: TimeEntry): string {
   const local = new Date(`${entry.date}T${entry.startTime}:00`);
   const offset = -local.getTimezoneOffset();
@@ -251,7 +306,8 @@ export async function uploadJiraWorklog(
 ): Promise<string> {
   const issueKey = entry.jiraKey?.trim().toUpperCase();
   if (!issueKey || !/^[A-Z][A-Z0-9_]*-\d+$/.test(issueKey)) throw new Error("Invalid Jira issue key.");
-  const description = entry.notes.trim() || entry.activityName;
+  const description = entry.notes.trim();
+  if (!description) throw new Error("A Jira work description is required.");
   const response = await jiraFetch(
     `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog`,
     credentials,

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_JIRA_PROJECT } from "../lib/constants";
+import type { JiraTransition } from "../lib/jira";
 import type { Activity, Project } from "../lib/types";
+import { JiraStatusControl } from "./JiraStatusControl";
 
 export interface ActivityDraft {
   name: string;
@@ -17,6 +19,8 @@ interface ActivityDialogProps {
   onClose: () => void;
   onSave: (draft: ActivityDraft) => Promise<void>;
   onDelete: (() => Promise<void>) | null;
+  onLoadJiraTransitions: (issueKey: string) => Promise<JiraTransition[]>;
+  onTransitionJira: (issueKey: string, transition: JiraTransition) => Promise<void>;
 }
 
 export function ActivityDialog({
@@ -25,6 +29,8 @@ export function ActivityDialog({
   onClose,
   onSave,
   onDelete,
+  onLoadJiraTransitions,
+  onTransitionJira,
 }: ActivityDialogProps) {
   const [name, setName] = useState(activity?.name ?? "");
   const [projectValue, setProjectValue] = useState(String(activity?.projectId ?? projects[0]?.id ?? "new"));
@@ -34,6 +40,9 @@ export function ActivityDialog({
   const [jiraProject, setJiraProject] = useState(activity?.jiraProject ?? DEFAULT_JIRA_PROJECT);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const statusIssueKey = /^[A-Z][A-Z0-9_]*-\d+$/.test(jiraKey.trim().toUpperCase())
+    ? jiraKey.trim().toUpperCase()
+    : null;
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -114,6 +123,15 @@ export function ActivityDialog({
             <input value={jiraProject} onChange={(event) => setJiraProject(event.target.value)} />
           </label>
         </div>
+
+        {statusIssueKey && (
+          <JiraStatusControl
+            issueKey={statusIssueKey}
+            status={activity?.jiraKey?.toUpperCase() === statusIssueKey ? activity.jiraStatus : null}
+            onLoad={onLoadJiraTransitions}
+            onTransition={onTransitionJira}
+          />
+        )}
 
         {error && <p className="form-error">{error}</p>}
         <footer className="dialog-actions">

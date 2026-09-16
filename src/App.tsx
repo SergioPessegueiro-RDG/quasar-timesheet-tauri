@@ -33,6 +33,7 @@ import {
   setProjectCollapsed,
   setSetting,
   syncJiraData,
+  updateActivityJiraStatus,
   updateTemplateEntry,
   updateActivity,
   updateProject,
@@ -40,10 +41,13 @@ import {
 } from "./lib/db/repository";
 import {
   fetchAssignedJiraIssues,
+  fetchJiraTransitions,
   fetchJiraWorklogs,
   testJiraConnection,
+  transitionJiraIssue,
   uploadJiraWorklog,
   type JiraCredentials,
+  type JiraTransition,
 } from "./lib/jira";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
 import {
@@ -64,6 +68,7 @@ import "./App.css";
 type View = "timesheet" | "template" | "summary";
 type EditorState = {
   mode: "timesheet" | "template";
+  source?: "timer";
   entry: TimeEntry | null;
   templateEntry?: TemplateEntry;
   initial: {
@@ -148,6 +153,36 @@ export default function App() {
       setOutlookGuideMessage(cause instanceof Error ? cause.message : String(cause));
     }
   }, [showWeekends, weekStart]);
+
+  const loadJiraTransitions = useCallback(async (issueKey: string) => {
+    const credentials = {
+      baseUrl: await getSetting("jira_base_url") ?? "",
+      email: await getSetting("jira_email") ?? "",
+      apiToken: await getSetting("jira_api_token") ?? "",
+    };
+    if (!credentials.baseUrl || !credentials.email || !credentials.apiToken) {
+      throw new Error("Complete the Jira connection in Settings first.");
+    }
+    return fetchJiraTransitions(credentials, issueKey);
+  }, []);
+
+  const changeJiraStatus = useCallback(async (issueKey: string, transition: JiraTransition) => {
+    const credentials = {
+      baseUrl: await getSetting("jira_base_url") ?? "",
+      email: await getSetting("jira_email") ?? "",
+      apiToken: await getSetting("jira_api_token") ?? "",
+    };
+    if (!credentials.baseUrl || !credentials.email || !credentials.apiToken) {
+      throw new Error("Complete the Jira connection in Settings first.");
+    }
+    await transitionJiraIssue(credentials, issueKey, transition.id);
+    await updateActivityJiraStatus(issueKey, transition.status);
+    setActivities((current) => current.map((activity) => (
+      activity.jiraKey?.toUpperCase() === issueKey.toUpperCase()
+        ? { ...activity, jiraStatus: transition.status }
+        : activity
+    )));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -395,13 +430,17 @@ export default function App() {
       window.alert("The Template is empty. Add recurring blocks there first.");
       return;
     }
-    const dates = dayNames.map((_, index) => isoDate(addDays(weekStart, index)));
-    const result = await applyTemplateToWeek(dates);
-    await loadEntries();
-    window.alert(
-      `Added ${result.created} block${result.created === 1 ? "" : "s"}`
-      + (result.skipped.length ? `; skipped ${result.skipped.length} occupied slot${result.skipped.length === 1 ? "" : "s"}.` : "."),
-    );
+    try {
+      const dates = dayNames.map((_, index) => isoDate(addDays(weekStart, index)));
+      const result = await applyTemplateToWeek(dates);
+      await loadEntries();
+      window.alert(
+        `Added ${result.created} block${result.created === 1 ? "" : "s"}`
+        + (result.skipped.length ? `; skipped ${result.skipped.length} occupied slot${result.skipped.length === 1 ? "" : "s"}.` : "."),
+      );
+    } catch (cause) {
+      window.alert(cause instanceof Error ? cause.message : String(cause));
+    }
   }
 
   const totalHours = useMemo(
@@ -457,22 +496,21 @@ export default function App() {
 
       {showTimer && <TimerBar
         activities={activities}
-        onLog={async (activity, startedAt, duration) => {
+        onFinish={(activity, startedAt, duration) => {
           const startMinutes = startedAt.getHours() * 60 + startedAt.getMinutes();
-          await addTimeEntry({
-            activityId: activity.id,
-            activityLabel: activity.name,
-            date: isoDate(startedAt),
-            startTime: toTime(startMinutes),
-            endTime: toTime(Math.min(startMinutes + duration, 23 * 60 + 59)),
-            notes: "",
-            jiraKey: activity.jiraKey,
-            jiraProject: activity.jiraProject,
-            issueType: activity.issueType,
+          setEditor({
+            mode: "timesheet",
+            source: "timer",
+            entry: null,
+            initial: {
+              activityId: activity.id,
+              date: isoDate(startedAt),
+              startTime: toTime(startMinutes),
+              endTime: toTime(Math.min(startMinutes + duration, 23 * 60 + 59)),
+            },
           });
           const currentWeek = startOfWeek(startedAt);
-          if (isoDate(currentWeek) === isoDate(weekStart)) await loadEntries();
-          else setWeekStart(currentWeek);
+          if (isoDate(currentWeek) !== isoDate(weekStart)) setWeekStart(currentWeek);
           setView("timesheet");
         }}
       />}
@@ -546,19 +584,12 @@ export default function App() {
                     activityId: entry.activityId ?? undefined,
                   },
                 })}
-                onQuickCreate={async (activity, date, startTime, endTime) => {
-                  await addTimeEntry({
-                    activityId: activity.id,
-                    activityLabel: activity.name,
-                    date,
-                    startTime,
-                    endTime,
-                    notes: "",
-                    jiraKey: activity.jiraKey,
-                    jiraProject: activity.jiraProject,
-                    issueType: activity.issueType,
+                onQuickCreate={(activity, date, startTime, endTime) => {
+                  setEditor({
+                    mode: "timesheet",
+                    entry: null,
+                    initial: { activityId: activity.id, date, startTime, endTime },
                   });
-                  await loadEntries();
                 }}
                 onMove={async (entry, date, startTime, endTime) => {
                   await moveTimeEntry(entry.id, date, startTime, endTime);
@@ -600,19 +631,12 @@ export default function App() {
                     activityId: entry.activityId ?? undefined,
                   },
                 })}
-                onQuickCreate={async (activity, date, startTime, endTime) => {
-                  await addTemplateEntry({
-                    activityId: activity.id,
-                    activityLabel: activity.name,
-                    dayOfWeek: TEMPLATE_DATES.indexOf(date),
-                    startTime,
-                    endTime,
-                    notes: "",
-                    jiraKey: activity.jiraKey,
-                    jiraProject: activity.jiraProject,
-                    issueType: activity.issueType,
+                onQuickCreate={(activity, date, startTime, endTime) => {
+                  setEditor({
+                    mode: "template",
+                    entry: null,
+                    initial: { activityId: activity.id, date, startTime, endTime },
                   });
-                  await loadTemplate();
                 }}
                 onMove={async (entry, date, startTime, endTime) => {
                   await moveTemplateEntry(entry.id, TEMPLATE_DATES.indexOf(date), startTime, endTime);
@@ -638,6 +662,8 @@ export default function App() {
           projects={projects}
           onClose={() => setActivityEditor(undefined)}
           onSave={saveActivity}
+          onLoadJiraTransitions={loadJiraTransitions}
+          onTransitionJira={changeJiraStatus}
           onDelete={activityEditor ? async () => {
             if (!window.confirm(`Delete “${activityEditor.name}”? Existing time blocks will be kept.`)) return;
             await deleteActivity(activityEditor.id);
@@ -714,8 +740,17 @@ export default function App() {
           dayOptions={editor.mode === "template"
             ? dayNames.map((label, index) => ({ value: TEMPLATE_DATES[index], label }))
             : undefined}
-          onClose={() => setEditor(null)}
+          onClose={(discard) => {
+            if (
+              discard
+              && editor.source === "timer"
+              && !window.confirm("Discard this tracked time without logging it?")
+            ) return;
+            setEditor(null);
+          }}
           onSave={saveTimeBlock}
+          onLoadJiraTransitions={loadJiraTransitions}
+          onTransitionJira={changeJiraStatus}
           onDelete={editor.entry ? async () => {
             if (editor.mode === "template") {
               await deleteTemplateEntry(editor.entry!.id);

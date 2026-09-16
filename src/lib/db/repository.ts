@@ -1,6 +1,12 @@
 import { DEFAULT_JIRA_PROJECT, FALLBACK_COLOR, PROJECT_COLORS } from "../constants";
 import { jiraWorklogTimes, type JiraIssue, type JiraWorklog } from "../jira";
-import type { Activity, Project, TemplateEntry, TimeEntry } from "../types";
+import {
+  requiredWorkDescription,
+  type Activity,
+  type Project,
+  type TemplateEntry,
+  type TimeEntry,
+} from "../types";
 import { database } from "./index";
 
 const now = () => new Date().toISOString();
@@ -119,6 +125,7 @@ export async function listActivities(includeArchived = false): Promise<Activity[
             a.project_id               AS projectId,
             a.jira_project             AS jiraProject,
             a.issue_type               AS issueType,
+            a.jira_status              AS jiraStatus,
             COALESCE(p.color, '${FALLBACK_COLOR}') AS color
        FROM activities a
        LEFT JOIN projects p ON p.id = a.project_id
@@ -181,17 +188,18 @@ export async function syncJiraData(
       if (activityId) {
         await db.execute(
           `UPDATE activities
-              SET name = $1, jira_project = $2, issue_type = $3, archived = 0
-            WHERE id = $4`,
-          [issue.summary, DEFAULT_JIRA_PROJECT, issue.issueType, activityId],
+              SET name = $1, jira_project = $2, issue_type = $3,
+                  jira_status = $4, archived = 0
+            WHERE id = $5`,
+          [issue.summary, DEFAULT_JIRA_PROJECT, issue.issueType, issue.status, activityId],
         );
       } else {
         const result = await db.execute(
           `INSERT INTO activities
               (name, jira_key, default_duration_minutes, archived, project_id,
-               jira_project, issue_type, created_at)
-           VALUES ($1, $2, 30, 0, $3, $4, $5, $6)`,
-          [issue.summary, issue.key, projectId, DEFAULT_JIRA_PROJECT, issue.issueType, now()],
+               jira_project, issue_type, jira_status, created_at)
+           VALUES ($1, $2, 30, 0, $3, $4, $5, $6, $7)`,
+          [issue.summary, issue.key, projectId, DEFAULT_JIRA_PROJECT, issue.issueType, issue.status, now()],
         );
         activityId = result.lastInsertId;
         activitiesCreated++;
@@ -245,6 +253,14 @@ export async function syncJiraData(
     throw cause;
   }
   return { activitiesCreated, worklogsCreated, worklogsUpdated };
+}
+
+export async function updateActivityJiraStatus(jiraKey: string, status: string): Promise<void> {
+  const db = await database();
+  await db.execute(
+    "UPDATE activities SET jira_status = $1 WHERE jira_key = $2 COLLATE NOCASE",
+    [status, jiraKey],
+  );
 }
 
 export async function updateActivity(activity: Omit<Activity, "color">): Promise<void> {
@@ -302,6 +318,7 @@ export type NewTimeEntry = Omit<TimeEntry, "id" | "color" | "activityName"> & {
 export async function addTimeEntry(entry: NewTimeEntry): Promise<number> {
   const db = await database();
   const timestamp = now();
+  const description = requiredWorkDescription(entry.notes);
   const result = await db.execute(
     `INSERT INTO time_entries
         (activity_id, activity_label, date, start_time, end_time, notes,
@@ -313,7 +330,7 @@ export async function addTimeEntry(entry: NewTimeEntry): Promise<number> {
       entry.date,
       entry.startTime,
       entry.endTime,
-      entry.notes,
+      description,
       entry.jiraKey,
       entry.jiraProject,
       entry.issueType,
@@ -348,6 +365,7 @@ export async function moveTimeEntry(
 
 export async function updateTimeEntry(entry: TimeEntry): Promise<void> {
   const db = await database();
+  const description = requiredWorkDescription(entry.notes);
   await db.execute(
     `UPDATE time_entries
         SET activity_id = $1, date = $2, start_time = $3, end_time = $4, notes = $5,
@@ -358,7 +376,7 @@ export async function updateTimeEntry(entry: TimeEntry): Promise<void> {
       entry.date,
       entry.startTime,
       entry.endTime,
-      entry.notes,
+      description,
       entry.jiraKey,
       entry.jiraProject,
       entry.issueType,
@@ -393,6 +411,7 @@ export type NewTemplateEntry = Omit<TemplateEntry, "id" | "color" | "activityNam
 export async function addTemplateEntry(entry: NewTemplateEntry): Promise<number> {
   const db = await database();
   const timestamp = now();
+  const description = requiredWorkDescription(entry.notes);
   const result = await db.execute(
     `INSERT INTO template_entries
         (activity_id, activity_label, day_of_week, start_time, end_time, notes,
@@ -404,7 +423,7 @@ export async function addTemplateEntry(entry: NewTemplateEntry): Promise<number>
       entry.dayOfWeek,
       entry.startTime,
       entry.endTime,
-      entry.notes,
+      description,
       entry.jiraKey,
       entry.jiraProject,
       entry.issueType,
@@ -432,6 +451,7 @@ export async function moveTemplateEntry(
 
 export async function updateTemplateEntry(entry: TemplateEntry): Promise<void> {
   const db = await database();
+  const description = requiredWorkDescription(entry.notes);
   await db.execute(
     `UPDATE template_entries
         SET activity_id = $1, day_of_week = $2, start_time = $3, end_time = $4, notes = $5,
@@ -442,7 +462,7 @@ export async function updateTemplateEntry(entry: TemplateEntry): Promise<void> {
       entry.dayOfWeek,
       entry.startTime,
       entry.endTime,
-      entry.notes,
+      description,
       entry.jiraKey,
       entry.jiraProject,
       entry.issueType,
@@ -462,6 +482,10 @@ export async function applyTemplateToWeek(
   weekDates: string[],
 ): Promise<{ created: number; skipped: TemplateEntry[] }> {
   const template = await listTemplateEntries();
+  const missingDescription = template.find((block) => !block.notes.trim());
+  if (missingDescription) {
+    throw new Error(`Add a description to the “${missingDescription.activityName}” template block before applying it.`);
+  }
   const existing = await listTimeEntries(weekDates[0] ?? "", weekDates[weekDates.length - 1] ?? "");
   const skipped: TemplateEntry[] = [];
   let created = 0;

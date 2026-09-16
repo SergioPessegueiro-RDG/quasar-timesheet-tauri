@@ -238,6 +238,29 @@ button:focus-visible {
   border-radius: 8px;
 }
 
+.timer-bar .timer-finish-button {
+  width: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  color: #e04f5f;
+  background: transparent;
+  cursor: pointer;
+}
+
+.timer-bar .timer-finish-button:hover {
+  border-color: #e04f5f;
+  background: rgb(224 79 95 / 8%);
+}
+
+.timer-stop-icon {
+  width: 8px;
+  height: 8px;
+  display: block;
+  margin: auto;
+  border-radius: 2px;
+  background: currentColor;
+}
+
 .timer-elapsed {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
@@ -1409,6 +1432,47 @@ button:focus-visible {
   min-width: 108px;
 }
 
+.jira-status-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-muted);
+}
+
+.jira-status-control > div,
+.jira-status-control > p {
+  grid-column: 1 / -1;
+}
+
+.jira-status-control > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jira-status-control > div > span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.jira-status-control > div > strong {
+  font-size: 10px;
+}
+
+.jira-status-control button {
+  min-width: 96px;
+}
+
+.jira-status-control > p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
 .settings-action-section {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -1613,7 +1677,8 @@ button:focus-visible {
   }
 
   .jira-settings,
-  .settings-action-section {
+  .settings-action-section,
+  .jira-status-control {
     grid-template-columns: 1fr;
   }
 

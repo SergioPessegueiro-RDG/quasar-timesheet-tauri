@@ -5,7 +5,9 @@ import {
   jiraKeyFromNumber,
   jiraKeyNumber,
 } from "../lib/constants";
+import type { JiraTransition } from "../lib/jira";
 import type { Activity, TimeEntry } from "../lib/types";
+import { JiraStatusControl } from "./JiraStatusControl";
 
 export interface TimeBlockDraft {
   activityId: number;
@@ -25,9 +27,11 @@ interface TimeBlockDialogProps {
   activities: Activity[];
   knownJiraProjects: string[];
   dayOptions?: Array<{ value: string; label: string }>;
-  onClose: () => void;
+  onClose: (discard: boolean) => void;
   onSave: (draft: TimeBlockDraft) => Promise<void>;
   onDelete: (() => Promise<void>) | null;
+  onLoadJiraTransitions: (issueKey: string) => Promise<JiraTransition[]>;
+  onTransitionJira: (issueKey: string, transition: JiraTransition) => Promise<void>;
 }
 
 export function TimeBlockDialog({
@@ -39,6 +43,8 @@ export function TimeBlockDialog({
   onClose,
   onSave,
   onDelete,
+  onLoadJiraTransitions,
+  onTransitionJira,
 }: TimeBlockDialogProps) {
   const initialActivity = activities.find(({ id }) => id === (entry?.activityId ?? initial.activityId));
   const [activityId, setActivityId] = useState(initialActivity?.id ?? activities[0]?.id ?? 0);
@@ -52,10 +58,15 @@ export function TimeBlockDialog({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const selectedActivity = activities.find(({ id }) => id === activityId);
+  const fullJiraKey = jiraKeyFromNumber(jiraKey)?.toUpperCase() ?? null;
+  const statusIssueKey = fullJiraKey && /^[A-Z][A-Z0-9_]*-\d+$/.test(fullJiraKey)
+    ? fullJiraKey
+    : null;
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onClose(true);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
@@ -77,6 +88,10 @@ export function TimeBlockDialog({
       setError("End time must be after start time.");
       return;
     }
+    if (!notes.trim()) {
+      setError("Add a description of the work completed.");
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -88,7 +103,7 @@ export function TimeBlockDialog({
         jiraKey: jiraKeyFromNumber(jiraKey),
         jiraProject: jiraProject.trim() || DEFAULT_JIRA_PROJECT,
       });
-      onClose();
+      onClose(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -98,7 +113,7 @@ export function TimeBlockDialog({
 
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
+      if (event.target === event.currentTarget) onClose(true);
     }}>
       <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="time-block-title">
         <div className="dialog-heading">
@@ -165,14 +180,26 @@ export function TimeBlockDialog({
           </label>
 
           <label>
-            <span>Notes</span>
+            <span>Description</span>
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={4}
               placeholder="What did you work on?"
+              required
             />
           </label>
+
+          {statusIssueKey && (
+            <JiraStatusControl
+              issueKey={statusIssueKey}
+              status={selectedActivity?.jiraKey?.toUpperCase() === statusIssueKey
+                ? selectedActivity.jiraStatus
+                : null}
+              onLoad={onLoadJiraTransitions}
+              onTransition={onTransitionJira}
+            />
+          )}
 
           {error && <p className="form-error" role="alert">{error}</p>}
 
@@ -181,14 +208,14 @@ export function TimeBlockDialog({
               <button className="danger-button" type="button" onClick={async () => {
                 if (!window.confirm(`Delete “${entry?.activityName}” on ${entry?.date}?`)) return;
                 await onDelete();
-                onClose();
+                onClose(false);
               }}>
                 Delete
               </button>
             )}
             {!onDelete && <span />}
             <span />
-            <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
+            <button className="secondary-button" type="button" onClick={() => onClose(true)}>Cancel</button>
             <button className="primary-button" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save block"}
             </button>

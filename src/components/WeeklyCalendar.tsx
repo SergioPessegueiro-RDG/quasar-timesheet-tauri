@@ -52,7 +52,7 @@ interface WeeklyCalendarProps {
     date: string,
     startTime: string,
     endTime: string,
-  ) => Promise<void>;
+  ) => void | Promise<void>;
   onMove: (
     entry: TimeEntry,
     date: string,
