@@ -96,6 +96,12 @@ const MIGRATIONS: string[][] = [
   [
     `ALTER TABLE time_entries ADD COLUMN jira_dirty INTEGER NOT NULL DEFAULT 0`,
   ],
+  [
+    `ALTER TABLE projects ADD COLUMN jira_key TEXT`,
+    `CREATE UNIQUE INDEX idx_projects_jira_key
+       ON projects(jira_key)
+       WHERE jira_key IS NOT NULL`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -53,6 +53,7 @@ import {
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
 import {
   DEFAULT_END_HOUR,
+  DEFAULT_JIRA_PROJECT,
   DEFAULT_START_HOUR,
   WEEKDAY_NAMES,
   WEEKEND_NAMES,
@@ -112,6 +113,7 @@ export default function App() {
   const [jiraUploading, setJiraUploading] = useState(false);
   const [jiraUploadMessage, setJiraUploadMessage] = useState("");
   const [jiraSyncMessage, setJiraSyncMessage] = useState("");
+  const [jiraConnected, setJiraConnected] = useState(false);
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
   const [projectEditor, setProjectEditor] = useState<Project | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -198,10 +200,14 @@ export default function App() {
       getSetting("work_start_hour"),
       getSetting("work_end_hour"),
       getSetting("show_weekends"),
+      getSetting("jira_base_url"),
+      getSetting("jira_email"),
+      getSetting("jira_api_token"),
     ])
       .then(([
         p, a, jiraProjects, , , savedTheme, savedShowTimer,
         savedStartHour, savedEndHour, savedShowWeekends,
+        savedJiraUrl, savedJiraEmail, savedJiraToken,
       ]) => {
         setProjects(p);
         setActivities(a);
@@ -215,6 +221,7 @@ export default function App() {
           setEndHour(nextEnd);
         }
         setShowWeekends(savedShowWeekends === "1");
+        setJiraConnected(Boolean(savedJiraUrl && savedJiraEmail && savedJiraToken));
         setError(null);
       })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
@@ -276,6 +283,8 @@ export default function App() {
       ]);
       await syncJiraData(issues, worklogs);
       await Promise.all([refreshWorkspace(), loadEntries()]);
+      setJiraConnected(true);
+      setArmedActivity(null);
       const message = `Synced ${issues.length} QDM${issues.length === 1 ? "" : "s"} and ${worklogs.length} Jira worklog${worklogs.length === 1 ? "" : "s"}.`;
       setJiraSyncMessage(message);
       return message;
@@ -461,6 +470,27 @@ export default function App() {
     () => entries.some((entry) => Boolean(entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty))),
     [entries],
   );
+  const visibleProjectIds = useMemo(
+    () => new Set(projects.filter((project) => (
+      !jiraConnected || project.jiraKey || project.name === DEFAULT_JIRA_PROJECT
+    )).map((project) => project.id)),
+    [jiraConnected, projects],
+  );
+  const visibleActivities = useMemo(
+    () => jiraConnected
+      ? activities.filter((activity) => Boolean(activity.jiraKey && visibleProjectIds.has(activity.projectId)))
+      : activities,
+    [activities, jiraConnected, visibleProjectIds],
+  );
+  const visibleProjects = useMemo(
+    () => jiraConnected
+      ? projects.filter((project) => (
+        visibleProjectIds.has(project.id)
+        && visibleActivities.some((activity) => activity.projectId === project.id)
+      ))
+      : projects,
+    [jiraConnected, projects, visibleActivities, visibleProjectIds],
+  );
 
   if (error) {
     return (
@@ -505,7 +535,7 @@ export default function App() {
       </header>
 
       {showTimer && <TimerBar
-        activities={activities}
+        activities={visibleActivities}
         onFinish={(activity, startedAt, duration) => {
           const startMinutes = startedAt.getHours() * 60 + startedAt.getMinutes();
           setEditor({
@@ -527,8 +557,8 @@ export default function App() {
 
       <div className="workspace">
         <Sidebar
-          projects={projects}
-          activities={activities}
+          projects={visibleProjects}
+          activities={visibleActivities}
           armedActivity={armedActivity}
           onArm={setArmedActivity}
           onToggleProject={toggleProject}
@@ -583,7 +613,7 @@ export default function App() {
                 weekStart={weekStart}
                 entries={entries}
                 guides={outlookGuides}
-                activities={activities}
+                activities={visibleActivities}
                 armedActivity={armedActivity}
                 dayNames={dayNames}
                 startHour={startHour}
@@ -627,7 +657,7 @@ export default function App() {
               <WeeklyCalendar
                 weekStart={TEMPLATE_WEEK}
                 entries={templateBlocks}
-                activities={activities}
+                activities={visibleActivities}
                 armedActivity={armedActivity}
                 showDates={false}
                 showNow={false}
@@ -664,7 +694,7 @@ export default function App() {
               />
             </>
           ) : (
-            <SummaryView activities={activities} projects={projects} showWeekends={showWeekends} />
+            <SummaryView activities={visibleActivities} projects={visibleProjects} showWeekends={showWeekends} />
           )}
         </main>
       </div>
@@ -674,7 +704,7 @@ export default function App() {
       {activityEditor !== undefined && (
         <ActivityDialog
           activity={activityEditor}
-          projects={projects}
+          projects={visibleProjects}
           onClose={() => setActivityEditor(undefined)}
           onSave={saveActivity}
           onLoadJiraTransitions={loadJiraTransitions}
@@ -722,6 +752,7 @@ export default function App() {
             setOutlookImportOpen(true);
           }}
           onSyncJira={syncJira}
+          onJiraConfigured={setJiraConnected}
           onSave={async (
             nextTheme,
             nextShowTimer,
@@ -750,7 +781,7 @@ export default function App() {
           key={`${editor.entry?.id ?? "new"}-${editor.initial.date}-${editor.initial.startTime}`}
           entry={editor.entry}
           initial={editor.initial}
-          activities={activities}
+          activities={visibleActivities}
           knownJiraProjects={knownJiraProjects}
           dayOptions={editor.mode === "template"
             ? dayNames.map((label, index) => ({ value: TEMPLATE_DATES[index], label }))

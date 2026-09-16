@@ -18,6 +18,7 @@ export interface JiraIssue {
   summary: string;
   issueType: string;
   status: string;
+  parent?: { id: string; key: string; summary: string };
 }
 
 export interface JiraTransition {
@@ -104,15 +105,24 @@ async function jiraJson<T>(
 function issueFromApi(value: {
   id?: string;
   key?: string;
-  fields?: { summary?: string; issuetype?: { name?: string }; status?: { name?: string } };
+  fields?: {
+    summary?: string;
+    issuetype?: { name?: string };
+    status?: { name?: string };
+    parent?: { id?: string; key?: string; fields?: { summary?: string } };
+  };
 }): JiraIssue | null {
   if (!value.id || !value.key || !value.fields?.summary) return null;
+  const parent = value.fields.parent;
   return {
     id: value.id,
     key: value.key,
     summary: value.fields.summary,
     issueType: value.fields.issuetype?.name ?? "Task",
     status: value.fields.status?.name ?? "Unknown",
+    ...(parent?.id && parent.key && parent.fields?.summary
+      ? { parent: { id: parent.id, key: parent.key, summary: parent.fields.summary } }
+      : {}),
   };
 }
 
@@ -133,7 +143,7 @@ async function searchJiraIssues(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jql,
-        fields: ["summary", "issuetype", "status"],
+        fields: ["summary", "issuetype", "status", "parent"],
         maxResults: 100,
         ...(nextPageToken ? { nextPageToken } : {}),
       }),

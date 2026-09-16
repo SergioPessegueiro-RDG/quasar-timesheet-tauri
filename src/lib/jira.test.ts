@@ -123,12 +123,30 @@ test("Jira sync fetches assigned open QDMs and only the current user's worklogs"
       if (body.jql.includes("worklogAuthor")) {
         return Response.json({
           isLast: true,
-          issues: [{ id: "100", key: "QDM-100", fields: { summary: "Delivery planning", issuetype: { name: "Task" }, status: { name: "In Progress" } } }],
+          issues: [{
+            id: "100",
+            key: "QDM-100",
+            fields: {
+              summary: "Delivery planning",
+              issuetype: { name: "Task" },
+              status: { name: "In Progress" },
+              parent: { id: "50", key: "QDM-50", fields: { summary: "September delivery" } },
+            },
+          }],
         });
       }
       return Response.json({
         isLast: true,
-        issues: [{ id: "100", key: "QDM-100", fields: { summary: "Delivery planning", issuetype: { name: "Task" }, status: { name: "In Progress" } } }],
+        issues: [{
+          id: "100",
+          key: "QDM-100",
+          fields: {
+            summary: "Delivery planning",
+            issuetype: { name: "Task" },
+            status: { name: "In Progress" },
+            parent: { id: "50", key: "QDM-50", fields: { summary: "September delivery" } },
+          },
+        }],
       });
     }
     return Response.json({
@@ -173,6 +191,7 @@ test("Jira sync fetches assigned open QDMs and only the current user's worklogs"
     summary: "Delivery planning",
     issueType: "Task",
     status: "In Progress",
+    parent: { id: "50", key: "QDM-50", summary: "September delivery" },
   }]);
   assert.deepEqual(worklogs, [{
     id: "501",

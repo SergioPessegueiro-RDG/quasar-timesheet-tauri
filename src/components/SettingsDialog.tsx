@@ -14,6 +14,7 @@ interface SettingsDialogProps {
   onExportCsv: () => void;
   onImportOutlook: () => void;
   onSyncJira: (credentials: JiraCredentials) => Promise<string>;
+  onJiraConfigured: (configured: boolean) => void;
   onSave: (
     theme: ThemeMode,
     showTimer: boolean,
@@ -33,6 +34,7 @@ export function SettingsDialog({
   onExportCsv,
   onImportOutlook,
   onSyncJira,
+  onJiraConfigured,
   onSave,
 }: SettingsDialogProps) {
   const [theme, setTheme] = useState(initialTheme);
@@ -115,6 +117,7 @@ export function SettingsDialog({
         saveJiraCredentials(credentials),
         onSave(theme, showTimer, startHour, endHour, showWeekends),
       ]);
+      onJiraConfigured(Boolean(credentials));
       onClose();
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));

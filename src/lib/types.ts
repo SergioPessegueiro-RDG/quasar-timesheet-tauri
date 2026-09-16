@@ -15,6 +15,7 @@ export interface Project {
   color: string;
   sortOrder: number;
   collapsed: boolean;
+  jiraKey?: string | null;
 }
 
 /** A single loggable thing, dragged onto the calendar. Belongs to one Project. */

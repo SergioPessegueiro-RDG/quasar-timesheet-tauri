@@ -42,7 +42,7 @@ function asBool(value: unknown): boolean {
 export async function listProjects(): Promise<Project[]> {
   const db = await database();
   const rows = await db.select<Project>(
-    `SELECT id, name, color, sort_order AS sortOrder, collapsed
+    `SELECT id, name, color, sort_order AS sortOrder, collapsed, jira_key AS jiraKey
        FROM projects
       ORDER BY sort_order, name COLLATE NOCASE`,
   );
@@ -164,14 +164,28 @@ export async function syncJiraData(
   worklogs: JiraWorklog[],
 ): Promise<{ activitiesCreated: number; worklogsCreated: number; worklogsUpdated: number }> {
   const db = await database();
-  const projectRows = await db.select<{ id: number }>(
-    "SELECT id FROM projects WHERE name = $1 LIMIT 1",
-    [DEFAULT_JIRA_PROJECT],
-  );
-  const projectId = projectRows[0]?.id ?? await addProject(DEFAULT_JIRA_PROJECT);
   const allIssues = new Map<string, JiraIssue>();
   for (const issue of issues) allIssues.set(issue.key, issue);
   for (const worklog of worklogs) allIssues.set(worklog.issue.key, worklog.issue);
+  const projectIds = new Map<string, number>();
+  for (const issue of allIssues.values()) {
+    const groupKey = issue.parent?.key ?? "";
+    if (projectIds.has(groupKey)) continue;
+    const projectName = issue.parent
+      ? `${issue.parent.key} · ${issue.parent.summary}`
+      : DEFAULT_JIRA_PROJECT;
+    const rows = issue.parent
+      ? await db.select<{ id: number }>("SELECT id FROM projects WHERE jira_key = $1 LIMIT 1", [groupKey])
+      : await db.select<{ id: number }>("SELECT id FROM projects WHERE name = $1 LIMIT 1", [projectName]);
+    const projectId = rows[0]?.id ?? await addProject(projectName);
+    if (issue.parent) {
+      await db.execute(
+        "UPDATE projects SET name = $1, jira_key = $2 WHERE id = $3",
+        [projectName, groupKey, projectId],
+      );
+    }
+    projectIds.set(groupKey, projectId);
+  }
   const activityIds = new Map<string, number>();
   let activitiesCreated = 0;
   let worklogsCreated = 0;
@@ -180,6 +194,8 @@ export async function syncJiraData(
   await db.execute("BEGIN IMMEDIATE");
   try {
     for (const issue of allIssues.values()) {
+      const projectId = projectIds.get(issue.parent?.key ?? "");
+      if (!projectId) continue;
       const existing = await db.select<{ id: number }>(
         "SELECT id FROM activities WHERE jira_key = $1 COLLATE NOCASE LIMIT 1",
         [issue.key],
@@ -189,9 +205,9 @@ export async function syncJiraData(
         await db.execute(
           `UPDATE activities
               SET name = $1, jira_project = $2, issue_type = $3,
-                  jira_status = $4, archived = 0
-            WHERE id = $5`,
-          [issue.summary, DEFAULT_JIRA_PROJECT, issue.issueType, issue.status, activityId],
+                  jira_status = $4, project_id = $5, archived = 0
+            WHERE id = $6`,
+          [issue.summary, DEFAULT_JIRA_PROJECT, issue.issueType, issue.status, projectId, activityId],
         );
       } else {
         const result = await db.execute(
