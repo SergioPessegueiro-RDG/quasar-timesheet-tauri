@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { createBackup, restoreBackup } from "../lib/db/backup";
-import { isTauri } from "../lib/db";
+import { useEffect, useState } from "react";
 import { getSetting, setSetting } from "../lib/db/repository";
 import { jiraCloudUrl } from "../lib/jira";
 
@@ -24,15 +22,6 @@ interface SettingsDialogProps {
   ) => Promise<void>;
 }
 
-function browserDownload(contents: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export function SettingsDialog({
   theme: initialTheme,
   showTimer: initialShowTimer,
@@ -54,7 +43,6 @@ export function SettingsDialog({
   const [jiraApiToken, setJiraApiToken] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -73,65 +61,6 @@ export function SettingsDialog({
       setJiraApiToken(apiToken ?? "");
     }).catch((cause) => setMessage(cause instanceof Error ? cause.message : String(cause)));
   }, []);
-
-  async function backup() {
-    setBusy(true);
-    setMessage("");
-    try {
-      const contents = await createBackup();
-      const filename = `quasar-timesheet-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      if (isTauri()) {
-        const [{ save }, { writeTextFile }] = await Promise.all([
-          import("@tauri-apps/plugin-dialog"),
-          import("@tauri-apps/plugin-fs"),
-        ]);
-        const path = await save({
-          title: "Back up QUASAR data",
-          defaultPath: filename,
-          filters: [{ name: "QUASAR backup", extensions: ["json"] }],
-        });
-        if (!path) return;
-        await writeTextFile(path, contents);
-      } else {
-        browserDownload(contents, filename);
-      }
-      setMessage("Backup saved.");
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function chooseRestore() {
-    if (isTauri()) {
-      const [{ open }, { readTextFile }] = await Promise.all([
-        import("@tauri-apps/plugin-dialog"),
-        import("@tauri-apps/plugin-fs"),
-      ]);
-      const path = await open({
-        title: "Restore QUASAR data",
-        multiple: false,
-        filters: [{ name: "QUASAR backup", extensions: ["json"] }],
-      });
-      if (typeof path === "string") await restore(await readTextFile(path));
-    } else {
-      fileInput.current?.click();
-    }
-  }
-
-  async function restore(contents: string) {
-    if (!window.confirm("Restore this backup? This replaces all current app data and cannot be undone.")) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await restoreBackup(contents);
-      window.location.reload();
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : String(cause));
-      setBusy(false);
-    }
-  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -245,46 +174,20 @@ export function SettingsDialog({
           </label>
         </section>
 
-        <section className="settings-section backup-section">
+        <section className="settings-section settings-action-section">
           <div>
             <strong>Outlook calendar</strong>
             <p>Configure calendar subscription links and import events.</p>
           </div>
-          <div className="backup-actions">
-            <button className="secondary-button" type="button" onClick={onImportOutlook}>Import Outlook…</button>
-          </div>
+          <button className="secondary-button" type="button" onClick={onImportOutlook}>Configure…</button>
         </section>
 
-        <section className="settings-section backup-section">
+        <section className="settings-section settings-action-section">
           <div>
             <strong>Jira CSV export</strong>
             <p>Export dated worklogs for Jira's CSV importer.</p>
           </div>
-          <div className="backup-actions">
-            <button className="secondary-button" type="button" onClick={onExportCsv}>Export CSV…</button>
-          </div>
-        </section>
-
-        <section className="settings-section backup-section">
-          <div>
-            <strong>Backup & restore</strong>
-            <p>Projects, activities, time blocks, templates, and settings in one portable file.</p>
-          </div>
-          <div className="backup-actions">
-            <button className="secondary-button" type="button" onClick={backup} disabled={busy}>Back up data…</button>
-            <button className="secondary-button" type="button" onClick={chooseRestore} disabled={busy}>Restore…</button>
-          </div>
-          <input
-            ref={fileInput}
-            className="hidden-file-input"
-            type="file"
-            accept=".json,application/json"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              if (file) await restore(await file.text());
-              event.target.value = "";
-            }}
-          />
+          <button className="secondary-button" type="button" onClick={onExportCsv}>Export CSV…</button>
         </section>
 
         {message && <p className="export-message" role="status">{message}</p>}

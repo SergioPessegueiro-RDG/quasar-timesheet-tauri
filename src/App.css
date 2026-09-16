@@ -1265,12 +1265,21 @@ button:focus-visible {
 
 .settings-dialog {
   width: min(610px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+}
+
+.settings-dialog .dialog-heading {
+  margin-bottom: 0;
 }
 
 .settings-section {
   display: grid;
   gap: 14px;
-  padding: 4px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-muted);
 }
 
 .settings-section p {
@@ -1358,32 +1367,27 @@ button:focus-visible {
   accent-color: var(--accent);
 }
 
-.backup-section {
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-
 .jira-settings {
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  grid-template-columns: 1fr 1fr;
 }
 
-.backup-actions {
-  display: flex;
-  gap: 8px;
+.jira-settings > div,
+.jira-settings > label:first-of-type {
+  grid-column: 1 / -1;
 }
 
-.backup-actions button {
+.settings-action-section {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.settings-action-section button {
   height: 34px;
   padding: 0 12px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 10px;
   font-weight: 700;
-}
-
-.hidden-file-input {
-  display: none;
 }
 
 .prefixed-input {
@@ -1573,6 +1577,15 @@ button:focus-visible {
 
   .form-row {
     grid-template-columns: 1fr;
+  }
+
+  .jira-settings,
+  .settings-action-section {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-action-section button {
+    justify-self: start;
   }
 
   .summary-columns {
