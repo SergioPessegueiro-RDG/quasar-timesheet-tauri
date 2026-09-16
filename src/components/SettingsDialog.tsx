@@ -48,6 +48,8 @@ export function SettingsDialog({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [jiraAction, setJiraAction] = useState<"test" | "sync" | null>(null);
+  const [jiraResult, setJiraResult] = useState<{ text: string; error: boolean } | null>(null);
+  const jiraDetailsComplete = Boolean(jiraBaseUrl.trim() && jiraEmail.trim() && jiraApiToken);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -90,18 +92,20 @@ export function SettingsDialog({
   async function runJiraAction(action: "test" | "sync") {
     setJiraAction(action);
     setMessage("");
+    setJiraResult(null);
     try {
       const credentials = currentJiraCredentials();
       if (!credentials) throw new Error("Add your Jira connection details first.");
       if (action === "test") {
         const user = await testJiraConnection(credentials);
-        setMessage(`Connected to Jira as ${user.displayName}.`);
+        setJiraResult({ text: `Connection successful — signed in as ${user.displayName}.`, error: false });
       } else {
         await saveJiraCredentials(credentials);
-        setMessage(await onSyncJira(credentials));
+        const text = await onSyncJira(credentials);
+        setJiraResult({ text, error: text.startsWith("Jira sync failed:") });
       }
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : String(cause));
+      setJiraResult({ text: cause instanceof Error ? cause.message : String(cause), error: true });
     } finally {
       setJiraAction(null);
     }
@@ -202,34 +206,54 @@ export function SettingsDialog({
           </div>
           <label>
             <span>Jira site</span>
-            <input type="url" value={jiraBaseUrl} onChange={(event) => setJiraBaseUrl(event.target.value)} placeholder="https://your-company.atlassian.net" />
+            <input type="url" value={jiraBaseUrl} onChange={(event) => {
+              setJiraBaseUrl(event.target.value);
+              setJiraResult(null);
+            }} placeholder="https://your-company.atlassian.net" />
           </label>
           <label>
             <span>Atlassian account email</span>
-            <input type="email" value={jiraEmail} onChange={(event) => setJiraEmail(event.target.value)} autoComplete="email" />
+            <input type="email" value={jiraEmail} onChange={(event) => {
+              setJiraEmail(event.target.value);
+              setJiraResult(null);
+            }} autoComplete="email" />
           </label>
           <label>
             <span>API token</span>
-            <input type="password" value={jiraApiToken} onChange={(event) => setJiraApiToken(event.target.value)} autoComplete="current-password" />
+            <input type="password" value={jiraApiToken} onChange={(event) => {
+              setJiraApiToken(event.target.value);
+              setJiraResult(null);
+            }} autoComplete="current-password" />
           </label>
           <div className="jira-actions">
             <button
               className="secondary-button"
               type="button"
-              disabled={busy || jiraAction !== null}
+              disabled={busy || jiraAction !== null || !jiraDetailsComplete}
               onClick={() => void runJiraAction("test")}
             >
-              {jiraAction === "test" ? "Testing…" : "Test connection"}
+              {jiraAction === "test" ? "Testing credentials…" : "Test credentials"}
             </button>
             <button
-              className="secondary-button"
+              className="primary-button"
               type="button"
-              disabled={busy || jiraAction !== null}
+              disabled={busy || jiraAction !== null || !jiraDetailsComplete}
               onClick={() => void runJiraAction("sync")}
             >
-              {jiraAction === "sync" ? "Syncing…" : "Sync now"}
+              {jiraAction === "sync" ? "Syncing QDMs…" : "Sync QDMs now"}
             </button>
           </div>
+          <p className="jira-action-help">
+            Test checks your credentials. Sync downloads assigned QDMs and your worklogs.
+          </p>
+          {jiraResult && (
+            <p
+              className={`jira-result${jiraResult.error ? " is-error" : " is-success"}`}
+              role={jiraResult.error ? "alert" : "status"}
+            >
+              {jiraResult.text}
+            </p>
+          )}
         </section>
 
         <section className="settings-section settings-action-section">

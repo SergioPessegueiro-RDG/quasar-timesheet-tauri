@@ -133,6 +133,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const jiraAutoSyncStarted = useRef(false);
+  const jiraSyncInFlight = useRef<Promise<string> | null>(null);
 
   const loadEntries = useCallback(async () => {
     const end = addDays(weekStart, showWeekends ? 6 : 4);
@@ -275,6 +276,20 @@ export default function App() {
   }
 
   async function syncJira(credentials?: JiraCredentials, silentIfMissing = false): Promise<string> {
+    if (jiraSyncInFlight.current) return jiraSyncInFlight.current;
+    const request = performJiraSync(credentials, silentIfMissing);
+    jiraSyncInFlight.current = request;
+    try {
+      return await request;
+    } finally {
+      if (jiraSyncInFlight.current === request) jiraSyncInFlight.current = null;
+    }
+  }
+
+  async function performJiraSync(
+    credentials?: JiraCredentials,
+    silentIfMissing = false,
+  ): Promise<string> {
     try {
       const saved = credentials ?? {
         baseUrl: await getSetting("jira_base_url") ?? "",

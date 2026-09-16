@@ -25,6 +25,18 @@ export interface SqlDriver {
   readonly persistent: boolean;
 }
 
+type Execute = (sql: string, params?: unknown[]) => Promise<ExecuteResult>;
+
+/** SQLite permits one writer at a time; keep all UI-triggered writes in order. */
+export function serializeExecute(execute: Execute): Execute {
+  let writeTail = Promise.resolve();
+  return (sql, params = []) => {
+    const result = writeTail.then(() => execute(sql, params));
+    writeTail = result.then(() => undefined, () => undefined);
+    return result;
+  };
+}
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -37,16 +49,17 @@ function toPositional(sql: string): string {
 async function createTauriDriver(): Promise<SqlDriver> {
   const { default: Database } = await import("@tauri-apps/plugin-sql");
   const db = await Database.load("sqlite:timesheet.db");
+  const execute = serializeExecute(async (sql, params = []) => {
+    const result = await db.execute(sql, params);
+    return {
+      lastInsertId: result.lastInsertId ?? 0,
+      rowsAffected: result.rowsAffected,
+    };
+  });
   return {
     persistent: true,
     select: (sql, params = []) => db.select(sql, params),
-    async execute(sql, params = []) {
-      const result = await db.execute(sql, params);
-      return {
-        lastInsertId: result.lastInsertId ?? 0,
-        rowsAffected: result.rowsAffected,
-      };
-    },
+    execute,
   };
 }
 
@@ -55,6 +68,16 @@ async function createBrowserDriver(): Promise<SqlDriver> {
   const sqlite3 = await sqlite3InitModule();
   const db = new sqlite3.oo1.DB(":memory:");
 
+  const execute = serializeExecute(async (sql, params = []) => {
+    db.exec({
+        sql: toPositional(sql),
+        ...(params.length ? { bind: params as never } : {}),
+      });
+    return {
+      lastInsertId: Number(db.selectValue("SELECT last_insert_rowid()") ?? 0),
+      rowsAffected: db.changes(),
+    };
+  });
   return {
     persistent: false,
     async select<T>(sql: string, params: unknown[] = []) {
@@ -65,16 +88,7 @@ async function createBrowserDriver(): Promise<SqlDriver> {
         returnValue: "resultRows",
       }) as T[];
     },
-    async execute(sql: string, params: unknown[] = []) {
-      db.exec({
-        sql: toPositional(sql),
-        ...(params.length ? { bind: params as never } : {}),
-      });
-      return {
-        lastInsertId: Number(db.selectValue("SELECT last_insert_rowid()") ?? 0),
-        rowsAffected: db.changes(),
-      };
-    },
+    execute,
   };
 }
 

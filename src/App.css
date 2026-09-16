@@ -1606,13 +1606,40 @@ button:focus-visible {
 }
 
 .jira-actions {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
 .jira-actions button {
-  min-width: 108px;
+  min-height: 36px;
+}
+
+.jira-action-help,
+.jira-result {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+}
+
+.jira-action-help {
+  color: var(--text-muted);
+}
+
+.jira-result {
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-weight: 650;
+}
+
+.jira-result.is-success {
+  color: #23845c;
+  background: color-mix(in srgb, #35b77f 12%, transparent);
+}
+
+.jira-result.is-error {
+  color: #df6b72;
+  background: color-mix(in srgb, #df6b72 10%, transparent);
 }
 
 .jira-status-control {

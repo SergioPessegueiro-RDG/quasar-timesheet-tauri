@@ -191,49 +191,50 @@ export async function syncJiraData(
   let worklogsCreated = 0;
   let worklogsUpdated = 0;
 
-  await db.execute("BEGIN IMMEDIATE");
-  try {
-    for (const issue of allIssues.values()) {
-      const projectId = projectIds.get(issue.parent?.key ?? "");
-      if (!projectId) continue;
-      const existing = await db.select<{ id: number }>(
+  // tauri-plugin-sql uses a connection pool, so BEGIN/COMMIT issued as separate
+  // frontend calls may run on different connections. The driver's write queue
+  // provides the required single-writer ordering instead.
+  for (const issue of allIssues.values()) {
+    const projectId = projectIds.get(issue.parent?.key ?? "");
+    if (!projectId) continue;
+    const existing = await db.select<{ id: number }>(
         "SELECT id FROM activities WHERE jira_key = $1 COLLATE NOCASE LIMIT 1",
         [issue.key],
       );
-      let activityId = existing[0]?.id;
-      if (activityId) {
-        await db.execute(
+    let activityId = existing[0]?.id;
+    if (activityId) {
+      await db.execute(
           `UPDATE activities
               SET name = $1, jira_project = $2, issue_type = $3,
                   jira_status = $4, project_id = $5, archived = 0
             WHERE id = $6`,
           [issue.summary, DEFAULT_JIRA_PROJECT, issue.issueType, issue.status, projectId, activityId],
         );
-      } else {
-        const result = await db.execute(
+    } else {
+      const result = await db.execute(
           `INSERT INTO activities
               (name, jira_key, default_duration_minutes, archived, project_id,
                jira_project, issue_type, jira_status, created_at)
            VALUES ($1, $2, 30, 0, $3, $4, $5, $6, $7)`,
           [issue.summary, issue.key, projectId, DEFAULT_JIRA_PROJECT, issue.issueType, issue.status, now()],
         );
-        activityId = result.lastInsertId;
-        activitiesCreated++;
-      }
-      activityIds.set(issue.key, activityId);
+      activityId = result.lastInsertId;
+      activitiesCreated++;
     }
+    activityIds.set(issue.key, activityId);
+  }
 
-    for (const worklog of worklogs) {
-      const activityId = activityIds.get(worklog.issue.key);
-      if (!activityId) continue;
-      const times = jiraWorklogTimes(worklog.started, worklog.timeSpentSeconds);
-      const existing = await db.select<{ id: number; jiraDirty: number }>(
+  for (const worklog of worklogs) {
+    const activityId = activityIds.get(worklog.issue.key);
+    if (!activityId) continue;
+    const times = jiraWorklogTimes(worklog.started, worklog.timeSpentSeconds);
+    const existing = await db.select<{ id: number; jiraDirty: number }>(
         "SELECT id, jira_dirty AS jiraDirty FROM time_entries WHERE jira_worklog_id = $1 LIMIT 1",
         [worklog.id],
       );
-      if (existing[0]) {
-        if (asBool(existing[0].jiraDirty)) continue;
-        await db.execute(
+    if (existing[0]) {
+      if (asBool(existing[0].jiraDirty)) continue;
+      await db.execute(
           `UPDATE time_entries
               SET activity_id = $1, activity_label = $2, date = $3,
                   start_time = $4, end_time = $5, notes = $6, jira_key = $7,
@@ -246,10 +247,10 @@ export async function syncJiraData(
             now(), worklog.id, existing[0].id,
           ],
         );
-        worklogsUpdated++;
-      } else {
-        const timestamp = now();
-        await db.execute(
+      worklogsUpdated++;
+    } else {
+      const timestamp = now();
+      await db.execute(
           `INSERT INTO time_entries
               (activity_id, activity_label, date, start_time, end_time, notes,
                jira_key, jira_project, issue_type, created_at, updated_at,
@@ -261,13 +262,8 @@ export async function syncJiraData(
             worklog.issue.issueType, timestamp, worklog.id,
           ],
         );
-        worklogsCreated++;
-      }
+      worklogsCreated++;
     }
-    await db.execute("COMMIT");
-  } catch (cause) {
-    await db.execute("ROLLBACK");
-    throw cause;
   }
   return { activitiesCreated, worklogsCreated, worklogsUpdated };
 }
