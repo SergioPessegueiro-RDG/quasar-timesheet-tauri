@@ -694,6 +694,7 @@ button:focus-visible {
 }
 
 .day-heading {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -715,6 +716,17 @@ button:focus-visible {
 .day-heading.is-today,
 .day-heading.is-today strong {
   color: var(--accent);
+}
+
+.now-outside-hours {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  color: #f05c68;
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .calendar-scroll {
@@ -803,10 +815,11 @@ button:focus-visible {
   position: absolute;
   right: 0;
   left: 0;
-  z-index: 2;
-  height: 1px;
+  z-index: 4;
+  height: 2px;
   pointer-events: none;
   background: #f05c68;
+  box-shadow: 0 0 7px rgb(240 92 104 / 42%);
 }
 
 .now-line::before {
@@ -818,6 +831,20 @@ button:focus-visible {
   height: 7px;
   border-radius: 50%;
   background: #f05c68;
+}
+
+.now-line > span {
+  position: absolute;
+  top: -10px;
+  left: 7px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #fff;
+  background: #d94755;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .time-block {

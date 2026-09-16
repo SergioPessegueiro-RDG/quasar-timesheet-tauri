@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -105,6 +106,7 @@ export function WeeklyCalendar({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activityDragOver, setActivityDragOver] = useState(false);
+  const [clock, setClock] = useState(() => new Date());
   const totalMinutes = (endHour - startHour) * 60;
   const dayCount = dayNames.length;
   const relativeMinute = (time: string) => toMinutes(time) - startHour * 60;
@@ -117,6 +119,13 @@ export function WeeklyCalendar({
   const dateKeys = dates.map(isoDate);
   const entriesByDay = dateKeys.map((date) => entries.filter((entry) => entry.date === date));
   const layouts = entriesByDay.map(layoutOverlaps);
+
+  useEffect(() => {
+    if (!showNow) return;
+    setClock(new Date());
+    const timer = window.setInterval(() => setClock(new Date()), 10_000);
+    return () => window.clearInterval(timer);
+  }, [showNow]);
 
   function setDragState(next: DragState | null) {
     dragRef.current = next;
@@ -341,9 +350,11 @@ export function WeeklyCalendar({
   }
 
   const preview = drag?.moved ? drag : null;
-  const today = isoDate(new Date());
-  const now = new Date();
-  const nowMinute = now.getHours() * 60 + now.getMinutes() - startHour * 60;
+  const today = isoDate(clock);
+  const nowMinute = clock.getHours() * 60 + clock.getMinutes() + clock.getSeconds() / 60 - startHour * 60;
+  const nowPosition = Math.max(0, Math.min(totalMinutes, nowMinute));
+  const nowRange = nowMinute < 0 ? "before" : nowMinute > totalMinutes ? "after" : "within";
+  const nowLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(clock);
   const calendarStyle = {
     "--day-count": dayCount,
     "--calendar-min-width": `${64 + dayCount * 140}px`,
@@ -361,6 +372,9 @@ export function WeeklyCalendar({
           <div className={`day-heading${isoDate(date) === today ? " is-today" : ""}`} key={dateKeys[index]}>
             <span>{dayNames[index]}</span>
             {showDates && <strong>{dateLabel(date)}</strong>}
+            {showNow && isoDate(date) === today && nowRange !== "within" && (
+              <small className="now-outside-hours">{nowLabel} · {nowRange} visible hours</small>
+            )}
           </div>
         ))}
       </div>
@@ -406,11 +420,13 @@ export function WeeklyCalendar({
               const dayEntries = entriesByDay[dayIndex];
               return (
                 <div className={`day-lane${dateKeys[dayIndex] === today ? " is-today" : ""}`} key={dateKeys[dayIndex]}>
-                  {showNow && dateKeys[dayIndex] === today && nowMinute >= 0 && nowMinute <= totalMinutes && (
+                  {showNow && dateKeys[dayIndex] === today && nowRange === "within" && (
                       <div
                         className="now-line"
-                        style={{ top: `${(nowMinute / totalMinutes) * 100}%` }}
-                      />
+                        style={{ top: `${(nowPosition / totalMinutes) * 100}%` }}
+                      >
+                        <span>{nowLabel}</span>
+                      </div>
                     )}
                   {dayEntries.map((entry) => {
                     const layout = layouts[dayIndex].get(entry.id) ?? { column: 0, columns: 1 };
