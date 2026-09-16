@@ -35,7 +35,9 @@ export async function createBackup(): Promise<string> {
   const db = await database();
   const tables = {} as BackupDocument["tables"];
   for (const table of Object.keys(TABLES) as TableName[]) {
-    const filter = table === "settings" ? " WHERE key <> 'outlook_ics_urls'" : "";
+    const filter = table === "settings"
+      ? " WHERE key NOT IN ('outlook_ics_urls', 'jira_api_token')"
+      : "";
     tables[table] = await db.select<BackupRow>(`SELECT * FROM ${table}${filter}`);
   }
   return JSON.stringify({

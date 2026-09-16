@@ -621,8 +621,7 @@ button:focus-visible {
   font-weight: 700;
 }
 
-.jira-button,
-.dialog-brand-heading {
+.jira-button {
   display: inline-flex;
   align-items: center;
 }
@@ -661,6 +660,16 @@ button:focus-visible {
   border-radius: 8px;
   color: var(--text-soft);
   background: var(--accent-soft);
+}
+
+.integration-message {
+  flex: none;
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-soft);
+  background: var(--accent-soft);
+  font-size: 10px;
 }
 
 .calendar-card {
@@ -1145,15 +1154,6 @@ button:focus-visible {
   margin-bottom: 22px;
 }
 
-.dialog-brand-heading {
-  gap: 11px;
-}
-
-.jira-logo.dialog-logo {
-  width: 29px;
-  height: 29px;
-}
-
 .dialog-heading h2 {
   margin: 0;
   font-size: 19px;
@@ -1359,6 +1359,11 @@ button:focus-visible {
 }
 
 .backup-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.jira-settings {
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createBackup, restoreBackup } from "../lib/db/backup";
 import { isTauri } from "../lib/db";
+import { getSetting, setSetting } from "../lib/db/repository";
+import { jiraCloudUrl } from "../lib/jira";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -45,6 +47,9 @@ export function SettingsDialog({
   const [startHour, setStartHour] = useState(initialStartHour);
   const [endHour, setEndHour] = useState(initialEndHour);
   const [showWeekends, setShowWeekends] = useState(initialShowWeekends);
+  const [jiraBaseUrl, setJiraBaseUrl] = useState("");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraApiToken, setJiraApiToken] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -54,6 +59,18 @@ export function SettingsDialog({
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
+
+  useEffect(() => {
+    Promise.all([
+      getSetting("jira_base_url"),
+      getSetting("jira_email"),
+      getSetting("jira_api_token"),
+    ]).then(([baseUrl, email, apiToken]) => {
+      setJiraBaseUrl(baseUrl ?? "");
+      setJiraEmail(email ?? "");
+      setJiraApiToken(apiToken ?? "");
+    }).catch((cause) => setMessage(cause instanceof Error ? cause.message : String(cause)));
+  }, []);
 
   async function backup() {
     setBusy(true);
@@ -117,9 +134,24 @@ export function SettingsDialog({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (endHour <= startHour) return setMessage("The work day must end after it starts.");
+    const hasAnyJiraDetails = jiraBaseUrl.trim() || jiraEmail.trim() || jiraApiToken;
+    if (hasAnyJiraDetails && (!jiraBaseUrl.trim() || !jiraEmail.trim() || !jiraApiToken)) {
+      return setMessage("Complete all three Jira connection fields, or leave all three empty.");
+    }
     setBusy(true);
-    await onSave(theme, showTimer, startHour, endHour, showWeekends);
-    onClose();
+    try {
+      const normalizedJiraUrl = hasAnyJiraDetails ? jiraCloudUrl(jiraBaseUrl) : "";
+      await Promise.all([
+        setSetting("jira_base_url", normalizedJiraUrl),
+        setSetting("jira_email", jiraEmail.trim()),
+        setSetting("jira_api_token", jiraApiToken),
+        onSave(theme, showTimer, startHour, endHour, showWeekends),
+      ]);
+      onClose();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause));
+      setBusy(false);
+    }
   }
 
   function hourLabel(hour: number) {
@@ -191,6 +223,25 @@ export function SettingsDialog({
           <span><strong>Show weekends</strong><small>Include Saturday and Sunday across calendar views.</small></span>
           <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
         </label>
+
+        <section className="settings-section jira-settings">
+          <div>
+            <strong>Jira connection</strong>
+            <p>Used when you press Upload Jira. The token stays on this device and is excluded from backups.</p>
+          </div>
+          <label>
+            <span>Jira site</span>
+            <input type="url" value={jiraBaseUrl} onChange={(event) => setJiraBaseUrl(event.target.value)} placeholder="https://your-company.atlassian.net" />
+          </label>
+          <label>
+            <span>Atlassian account email</span>
+            <input type="email" value={jiraEmail} onChange={(event) => setJiraEmail(event.target.value)} autoComplete="email" />
+          </label>
+          <label>
+            <span>API token</span>
+            <input type="password" value={jiraApiToken} onChange={(event) => setJiraApiToken(event.target.value)} autoComplete="current-password" />
+          </label>
+        </section>
 
         <section className="settings-section backup-section">
           <div>

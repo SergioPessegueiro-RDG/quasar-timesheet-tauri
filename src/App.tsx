@@ -5,7 +5,6 @@ import { ProjectDialog } from "./components/ProjectDialog";
 import { SettingsDialog, type ThemeMode } from "./components/SettingsDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { OutlookImportDialog } from "./components/OutlookImportDialog";
-import { JiraUploadDialog } from "./components/JiraUploadDialog";
 import { JiraMark } from "./components/JiraMark";
 import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
@@ -28,6 +27,7 @@ import {
   listProjects,
   listTemplateEntries,
   listTimeEntries,
+  markJiraWorklogUploaded,
   moveTemplateEntry,
   moveTimeEntry,
   setProjectCollapsed,
@@ -37,6 +37,7 @@ import {
   updateProject,
   updateTimeEntry,
 } from "./lib/db/repository";
+import { uploadJiraWorklog } from "./lib/jira";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
 import {
   DEFAULT_END_HOUR,
@@ -87,7 +88,8 @@ export default function App() {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [outlookImportOpen, setOutlookImportOpen] = useState(false);
-  const [jiraUploadOpen, setJiraUploadOpen] = useState(false);
+  const [jiraUploading, setJiraUploading] = useState(false);
+  const [jiraUploadMessage, setJiraUploadMessage] = useState("");
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
   const [projectEditor, setProjectEditor] = useState<Project | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -163,6 +165,50 @@ export default function App() {
     setArmedActivity((current) => (
       current ? nextActivities.find(({ id }) => id === current.id) ?? null : null
     ));
+  }
+
+  async function uploadCurrentWeekToJira() {
+    setJiraUploading(true);
+    setJiraUploadMessage("");
+    try {
+      const [baseUrl, email, apiToken] = await Promise.all([
+        getSetting("jira_base_url"),
+        getSetting("jira_email"),
+        getSetting("jira_api_token"),
+      ]);
+      if (!baseUrl || !email || !apiToken) {
+        setJiraUploadMessage("Complete the Jira connection in Settings first.");
+        setSettingsOpen(true);
+        return;
+      }
+
+      const pending = entries.filter((entry) => entry.jiraKey && !entry.jiraWorklogId);
+      if (!pending.length) {
+        setJiraUploadMessage("No new Jira worklogs in this week.");
+        return;
+      }
+
+      let uploaded = 0;
+      const failures: string[] = [];
+      for (const entry of pending) {
+        try {
+          const worklogId = await uploadJiraWorklog(entry, { baseUrl, email, apiToken });
+          await markJiraWorklogUploaded(entry.id, worklogId);
+          uploaded++;
+        } catch (cause) {
+          failures.push(`${entry.jiraKey}: ${cause instanceof Error ? cause.message : String(cause)}`);
+        }
+      }
+      await loadEntries();
+      setJiraUploadMessage(
+        `Uploaded ${uploaded} worklog${uploaded === 1 ? "" : "s"}.`
+        + (failures.length ? ` Failed ${failures.length}: ${failures.slice(0, 2).join(" | ")}` : ""),
+      );
+    } catch (cause) {
+      setJiraUploadMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setJiraUploading(false);
+    }
   }
 
   async function saveActivity(draft: ActivityDraft) {
@@ -380,8 +426,8 @@ export default function App() {
                 </div>
                 <button className="secondary-button toolbar-button" type="button" onClick={applyTemplate}>Apply template</button>
                 <button className="secondary-button toolbar-button" type="button" onClick={() => setOutlookImportOpen(true)}>Import Outlook</button>
-                <button className="secondary-button toolbar-button jira-button" type="button" onClick={() => setJiraUploadOpen(true)}>
-                  <JiraMark /> Upload Jira
+                <button className="secondary-button toolbar-button jira-button" type="button" onClick={uploadCurrentWeekToJira} disabled={jiraUploading}>
+                  <JiraMark /> {jiraUploading ? "Uploading…" : "Upload Jira"}
                 </button>
               </div>
             )}
@@ -389,6 +435,7 @@ export default function App() {
 
           {view === "timesheet" ? (
             <>
+              {jiraUploadMessage && <p className="integration-message" role="status">{jiraUploadMessage}</p>}
               <div className={`placement-hint${armedActivity ? " is-active" : ""}`} role="status">
                 <span>{armedActivity ? "＋" : "↖"}</span>
                 {armedActivity
@@ -609,14 +656,6 @@ export default function App() {
         />
       )}
 
-      {jiraUploadOpen && (
-        <JiraUploadDialog
-          initialStart={isoDate(weekStart)}
-          initialEnd={isoDate(addDays(weekStart, showWeekends ? 6 : 4))}
-          onUploaded={loadEntries}
-          onClose={() => setJiraUploadOpen(false)}
-        />
-      )}
     </div>
   );
 }
