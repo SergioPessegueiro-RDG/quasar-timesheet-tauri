@@ -90,7 +90,6 @@ export function ExportDialog({ initialStart, initialEnd, onClose }: ExportDialog
             <p className="eyebrow">Jira worklogs</p>
             <h2 id="export-title">Export CSV</h2>
           </div>
-          <button className="dialog-close" type="button" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <form onSubmit={submit}>

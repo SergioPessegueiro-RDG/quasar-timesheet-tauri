@@ -72,7 +72,6 @@ export function ActivityDialog({
             <p className="eyebrow">{activity ? "Edit" : "New"} activity</p>
             <h2>{activity ? activity.name : "Add an activity"}</h2>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close">×</button>
         </header>
 
         <label>

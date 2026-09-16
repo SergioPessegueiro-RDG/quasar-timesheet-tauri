@@ -1195,20 +1195,6 @@ button:focus-visible {
   letter-spacing: -0.02em;
 }
 
-.dialog-close {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
-  font-size: 19px;
-}
-
 .dialog form,
 .dialog label {
   display: grid;

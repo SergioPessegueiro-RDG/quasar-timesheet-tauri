@@ -106,7 +106,6 @@ export function TimeBlockDialog({
             <p className="eyebrow">Timesheet</p>
             <h2 id="time-block-title">{entry ? "Edit time block" : "New time block"}</h2>
           </div>
-          <button className="dialog-close" type="button" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <form onSubmit={submit}>

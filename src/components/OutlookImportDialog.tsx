@@ -55,7 +55,6 @@ export function OutlookImportDialog({
             <p className="eyebrow">Outlook calendar</p>
             <h2 id="outlook-title">Calendar subscriptions</h2>
           </div>
-          <button className="dialog-close" type="button" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <form onSubmit={submit}>

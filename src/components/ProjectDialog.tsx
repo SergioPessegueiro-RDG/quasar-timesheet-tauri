@@ -36,7 +36,6 @@ export function ProjectDialog({ project, onClose, onSave, onDelete }: ProjectDia
             <p className="eyebrow">Edit project</p>
             <h2>{project.name}</h2>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close">×</button>
         </header>
         <label>
           <span>Name</span>
