@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Sidebar } from "./components/Sidebar";
 import { ActivityDialog, type ActivityDraft } from "./components/ActivityDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
@@ -12,6 +20,7 @@ import { TimerBar } from "./components/TimerBar";
 import { WeeklyCalendar } from "./components/WeeklyCalendar";
 import { isTauri } from "./lib/db";
 import { checkForAppUpdate } from "./lib/updater";
+import { clampSidebarWidth, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from "./lib/layout";
 import {
   addTimeEntry,
   addTemplateEntry,
@@ -92,6 +101,7 @@ type EditorState = {
 const TEMPLATE_WEEK = new Date(2000, 0, 3);
 const ALL_DAY_NAMES = [...WEEKDAY_NAMES, ...WEEKEND_NAMES];
 const TEMPLATE_DATES = ALL_DAY_NAMES.map((_, index) => isoDate(addDays(TEMPLATE_WEEK, index)));
+const SIDEBAR_WIDTH_KEY = "quasar-sidebar-width";
 
 function weekTitle(monday: Date, showWeekends: boolean): string {
   const lastDay = addDays(monday, showWeekends ? 6 : 4);
@@ -130,10 +140,28 @@ export default function App() {
   const [startHour, setStartHour] = useState(DEFAULT_START_HOUR);
   const [endHour, setEndHour] = useState(DEFAULT_END_HOUR);
   const [showWeekends, setShowWeekends] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const savedWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    const preferredWidth = Number.isFinite(savedWidth) && savedWidth > 0
+      ? savedWidth
+      : window.innerWidth <= 1180 ? 224 : 264;
+    return clampSidebarWidth(preferredWidth, window.innerWidth);
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const jiraAutoSyncStarted = useRef(false);
   const jiraSyncInFlight = useRef<Promise<string> | null>(null);
+  const sidebarResize = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const fitSidebar = () => setSidebarWidth((width) => clampSidebarWidth(width, window.innerWidth));
+    window.addEventListener("resize", fitSidebar);
+    return () => window.removeEventListener("resize", fitSidebar);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
 
   const loadEntries = useCallback(async () => {
     const end = addDays(weekStart, showWeekends ? 6 : 4);
@@ -520,6 +548,32 @@ export default function App() {
       : projects,
     [jiraConnected, projects, visibleActivities, visibleProjectIds],
   );
+  const workspaceStyle = { "--sidebar-width": `${sidebarWidth}px` } as CSSProperties;
+
+  function beginSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    sidebarResize.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: sidebarWidth,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.classList.add("is-resizing");
+  }
+
+  function updateSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const resize = sidebarResize.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    setSidebarWidth(clampSidebarWidth(
+      resize.startWidth + event.clientX - resize.startX,
+      window.innerWidth,
+    ));
+  }
+
+  function finishSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (sidebarResize.current?.pointerId !== event.pointerId) return;
+    sidebarResize.current = null;
+    event.currentTarget.classList.remove("is-resizing");
+  }
 
   if (error) {
     return (
@@ -584,7 +638,7 @@ export default function App() {
         }}
       />}
 
-      <div className="workspace">
+      <div className="workspace" style={workspaceStyle}>
         <Sidebar
           projects={visibleProjects}
           activities={visibleActivities}
@@ -595,6 +649,30 @@ export default function App() {
           onEditActivity={setActivityEditor}
           onEditProject={setProjectEditor}
         />
+
+        <div
+          className="workspace-divider"
+          role="separator"
+          aria-label="Resize Activities panel"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_SIDEBAR_WIDTH}
+          aria-valuemax={MAX_SIDEBAR_WIDTH}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          onPointerDown={beginSidebarResize}
+          onPointerMove={updateSidebarResize}
+          onPointerUp={finishSidebarResize}
+          onPointerCancel={finishSidebarResize}
+          onDoubleClick={() => setSidebarWidth(window.innerWidth <= 1180 ? 224 : 264)}
+          onKeyDown={(event) => {
+            const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+            if (!direction) return;
+            event.preventDefault();
+            setSidebarWidth((width) => clampSidebarWidth(width + direction * 16, window.innerWidth));
+          }}
+        >
+          <span />
+        </div>
 
         <main className="main-content">
           <div className="page-heading">

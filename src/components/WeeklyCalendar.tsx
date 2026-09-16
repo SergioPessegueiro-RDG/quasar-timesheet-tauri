@@ -28,6 +28,7 @@ import {
 import type { OutlookEvent } from "../lib/outlook";
 import type { Activity, TimeEntry } from "../lib/types";
 import { durationMinutes, isJiraSyncPending, toMinutes, toTime } from "../lib/types";
+import { OutlookGuideDialog } from "./OutlookGuideDialog";
 
 interface WeeklyCalendarProps {
   weekStart: Date;
@@ -115,6 +116,7 @@ export function WeeklyCalendar({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activityDragOver, setActivityDragOver] = useState(false);
   const [clock, setClock] = useState(() => new Date());
+  const [selectedGuide, setSelectedGuide] = useState<OutlookEvent | null>(null);
   const totalMinutes = 24 * 60;
   const dayCount = dayNames.length;
   const relativeMinute = toMinutes;
@@ -400,12 +402,21 @@ export function WeeklyCalendar({
           <div className="time-gutter time-labels" aria-hidden="true">
             {Array.from({ length: 25 }, (_, hour) => (
               <span
+                className="hour-label"
                 key={hour}
                 style={{ top: `${(hour / 24) * 100}%` }}
               >
                 {hourLabel(hour)}
               </span>
             ))}
+            {showNow && dateKeys.includes(today) && (
+              <span
+                className="now-time-label"
+                style={{ top: `${(nowMinute / totalMinutes) * 100}%` }}
+              >
+                {nowLabel}
+              </span>
+            )}
           </div>
 
           <div
@@ -443,6 +454,11 @@ export function WeeklyCalendar({
                       role="note"
                       aria-label={`Outlook: ${guide.title}, ${guide.startTime} to ${guide.endTime}`}
                       title={`${guide.title}\n${guide.startTime}–${guide.endTime}${guide.notes ? `\n${guide.notes}` : ""}`}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedGuide(guide);
+                      }}
                       key={`${guide.externalId}-${guideIndex}`}
                       style={{
                         top: `${(toMinutes(guide.startTime) / totalMinutes) * 100}%`,
@@ -457,9 +473,7 @@ export function WeeklyCalendar({
                       <div
                         className="now-line"
                         style={{ top: `${(nowMinute / totalMinutes) * 100}%` }}
-                      >
-                        <span>{nowLabel}</span>
-                      </div>
+                      />
                     )}
                   {dayEntries.map((entry) => {
                     const layout = layouts[dayIndex].get(entry.id) ?? { column: 0, columns: 1 };
@@ -523,6 +537,10 @@ export function WeeklyCalendar({
         ))}
       </div>
       </div>
+
+      {selectedGuide && (
+        <OutlookGuideDialog event={selectedGuide} onClose={() => setSelectedGuide(null)} />
+      )}
     </section>
   );
 }

@@ -204,8 +204,43 @@ button:focus-visible {
 .workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 264px) 7px minmax(0, 1fr);
   flex: 1;
+}
+
+.workspace-divider {
+  position: relative;
+  z-index: 6;
+  width: 7px;
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  outline: none;
+  background: var(--panel);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.workspace-divider > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 38px;
+  border-radius: 3px;
+  background: var(--line-strong);
+  transform: translate(-50%, -50%);
+}
+
+.workspace-divider:hover,
+.workspace-divider:focus-visible,
+.workspace-divider.is-resizing {
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.workspace-divider:hover > span,
+.workspace-divider:focus-visible > span,
+.workspace-divider.is-resizing > span {
+  background: var(--accent);
 }
 
 .timer-bar {
@@ -402,7 +437,6 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   padding: 22px 14px 14px;
-  border-right: 1px solid var(--line);
   background: var(--panel);
 }
 
@@ -944,7 +978,7 @@ button:focus-visible {
   background: var(--panel);
 }
 
-.time-labels span {
+.time-labels .hour-label {
   position: absolute;
   right: 9px;
   color: var(--text-muted);
@@ -952,12 +986,27 @@ button:focus-visible {
   transform: translateY(-50%);
 }
 
-.time-labels span:first-child {
+.time-labels .hour-label:first-child {
   transform: translateY(4px);
 }
 
-.time-labels span:last-child {
+.time-labels .hour-label:nth-child(25) {
   transform: translateY(calc(-100% - 4px));
+}
+
+.time-labels .now-time-label {
+  position: absolute;
+  right: 5px;
+  z-index: 3;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #fff;
+  background: #d94755;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform: translateY(-50%);
 }
 
 .day-lanes {
@@ -1005,7 +1054,7 @@ button:focus-visible {
   border-radius: 6px;
   color: var(--text-soft);
   background: color-mix(in srgb, var(--text-muted) 12%, var(--panel));
-  pointer-events: none;
+  cursor: context-menu;
   opacity: 0.8;
 }
 
@@ -1048,20 +1097,6 @@ button:focus-visible {
   background: #f05c68;
 }
 
-.now-line > span {
-  position: absolute;
-  top: -10px;
-  left: 7px;
-  padding: 2px 5px;
-  border-radius: 4px;
-  color: #fff;
-  background: #d94755;
-  font-size: 9px;
-  font-weight: 750;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
 .time-block {
   position: absolute;
   z-index: 3;
@@ -1079,6 +1114,48 @@ button:focus-visible {
   box-shadow: 0 2px 6px color-mix(in srgb, var(--block-color) 25%, transparent);
   cursor: grab;
   text-align: left;
+}
+
+.outlook-guide-dialog dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.outlook-guide-dialog dl > div,
+.outlook-guide-notes {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-muted);
+}
+
+.outlook-guide-dialog dt {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.outlook-guide-dialog dd {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.outlook-guide-notes p {
+  max-height: 240px;
+  margin: 8px 0 0;
+  overflow: auto;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.outlook-guide-notes a {
+  color: var(--accent);
 }
 
 .time-block::before,
@@ -1888,10 +1965,6 @@ button:focus-visible {
 }
 
 @media (max-width: 1180px) {
-  .workspace {
-    grid-template-columns: 224px minmax(0, 1fr);
-  }
-
   .sidebar {
     padding-inline: 9px;
   }
