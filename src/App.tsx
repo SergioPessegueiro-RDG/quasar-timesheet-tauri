@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { ActivityDialog, type ActivityDraft } from "./components/ActivityDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
+import { SettingsDialog, type ThemeMode } from "./components/SettingsDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
@@ -18,6 +19,7 @@ import {
   deleteActivity,
   deleteProject,
   deleteTimeEntry,
+  getSetting,
   listActivities,
   listKnownJiraProjects,
   listProjects,
@@ -26,6 +28,7 @@ import {
   moveTemplateEntry,
   moveTimeEntry,
   setProjectCollapsed,
+  setSetting,
   updateTemplateEntry,
   updateActivity,
   updateProject,
@@ -76,6 +79,9 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
   const [projectEditor, setProjectEditor] = useState<Project | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>("system");
+  const [showTimer, setShowTimer] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,16 +95,32 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([listProjects(), listActivities(), listKnownJiraProjects(), loadEntries(), loadTemplate()])
-      .then(([p, a, jiraProjects]) => {
+    Promise.all([
+      listProjects(),
+      listActivities(),
+      listKnownJiraProjects(),
+      loadEntries(),
+      loadTemplate(),
+      getSetting("theme_mode"),
+      getSetting("show_timer"),
+    ])
+      .then(([p, a, jiraProjects, , , savedTheme, savedShowTimer]) => {
         setProjects(p);
         setActivities(a);
         setKnownJiraProjects(jiraProjects);
+        if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+        setShowTimer(savedShowTimer !== "0");
         setError(null);
       })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setLoading(false));
   }, [loadEntries, loadTemplate]);
+
+  useEffect(() => {
+    if (theme === "system") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme === "system" ? "light dark" : theme;
+  }, [theme]);
 
   if (error) {
     return (
@@ -272,11 +294,11 @@ export default function App() {
             <i className={isTauri() ? "is-native" : ""} />
             {isTauri() ? "Local" : "Dev"}
           </span>
-          <button className="icon-button" type="button" aria-label="Settings" title="Settings">⚙</button>
+          <button className="icon-button" type="button" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}>⚙</button>
         </div>
       </header>
 
-      <TimerBar
+      {showTimer && <TimerBar
         activities={activities}
         onLog={async (activity, startedAt, duration) => {
           const startMinutes = startedAt.getHours() * 60 + startedAt.getMinutes();
@@ -296,7 +318,7 @@ export default function App() {
           else setWeekStart(currentWeek);
           setView("timesheet");
         }}
-      />
+      />}
 
       <div className="workspace">
         <Sidebar
@@ -467,6 +489,22 @@ export default function App() {
             await deleteProject(projectEditor.id);
             await refreshWorkspace();
             setProjectEditor(null);
+          }}
+        />
+      )}
+
+      {settingsOpen && (
+        <SettingsDialog
+          theme={theme}
+          showTimer={showTimer}
+          onClose={() => setSettingsOpen(false)}
+          onSave={async (nextTheme, nextShowTimer) => {
+            await Promise.all([
+              setSetting("theme_mode", nextTheme),
+              setSetting("show_timer", nextShowTimer ? "1" : "0"),
+            ]);
+            setTheme(nextTheme);
+            setShowTimer(nextShowTimer);
           }}
         />
       )}
