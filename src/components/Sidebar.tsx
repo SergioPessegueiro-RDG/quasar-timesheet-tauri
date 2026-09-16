@@ -6,6 +6,9 @@ interface SidebarProps {
   armedActivity: Activity | null;
   onArm: (activity: Activity | null) => void;
   onToggleProject: (project: Project) => void;
+  onAddActivity: () => void;
+  onEditActivity: (activity: Activity) => void;
+  onEditProject: (project: Project) => void;
 }
 
 function durationLabel(minutes: number | null): string {
@@ -21,6 +24,9 @@ export function Sidebar({
   armedActivity,
   onArm,
   onToggleProject,
+  onAddActivity,
+  onEditActivity,
+  onEditProject,
 }: SidebarProps) {
   return (
     <aside className="sidebar" aria-label="Activities">
@@ -29,7 +35,7 @@ export function Sidebar({
           <p className="eyebrow">Workspace</p>
           <h2>Activities</h2>
         </div>
-        <button className="icon-button" aria-label="Add activity" title="Add activity">+</button>
+        <button className="icon-button" type="button" aria-label="Add activity" title="Add activity" onClick={onAddActivity}>+</button>
       </div>
 
       <div className="project-list">
@@ -37,6 +43,7 @@ export function Sidebar({
           const children = activities.filter((activity) => activity.projectId === project.id);
           return (
             <section className="project-group" key={project.id}>
+              <div className="project-heading-wrap">
               <button
                 className="project-heading"
                 type="button"
@@ -50,15 +57,23 @@ export function Sidebar({
                 <span>{project.name}</span>
                 <span className="project-count">{children.length}</span>
               </button>
+              <button
+                className="project-edit"
+                type="button"
+                aria-label={`Edit project ${project.name}`}
+                title={`Edit ${project.name}`}
+                onClick={() => onEditProject(project)}
+              >•••</button>
+              </div>
 
               {!project.collapsed && (
                 <div className="activity-list">
                   {children.map((activity) => {
                     const armed = armedActivity?.id === activity.id;
                     return (
+                      <div className="activity-row-wrap" key={activity.id}>
                       <button
                         className={`activity-row${armed ? " is-armed" : ""}`}
-                        key={activity.id}
                         type="button"
                         aria-pressed={armed}
                         onClick={() => onArm(armed ? null : activity)}
@@ -74,6 +89,14 @@ export function Sidebar({
                           {durationLabel(activity.defaultDurationMinutes)}
                         </span>
                       </button>
+                      <button
+                        className="activity-edit"
+                        type="button"
+                        aria-label={`Edit ${activity.name}`}
+                        title={`Edit ${activity.name}`}
+                        onClick={() => onEditActivity(activity)}
+                      >•••</button>
+                      </div>
                     );
                   })}
                 </div>

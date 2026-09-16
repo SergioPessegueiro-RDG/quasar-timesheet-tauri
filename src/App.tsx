@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
+import { ActivityDialog, type ActivityDraft } from "./components/ActivityDialog";
+import { ProjectDialog } from "./components/ProjectDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
+import { TimerBar } from "./components/TimerBar";
 import { WeeklyCalendar } from "./components/WeeklyCalendar";
 import { isTauri } from "./lib/db";
 import {
   addTimeEntry,
   addTemplateEntry,
+  addActivity,
+  addProject,
   applyTemplateToWeek,
   deleteTemplateEntry,
+  deleteActivity,
+  deleteProject,
   deleteTimeEntry,
   listActivities,
   listKnownJiraProjects,
@@ -20,11 +27,13 @@ import {
   moveTimeEntry,
   setProjectCollapsed,
   updateTemplateEntry,
+  updateActivity,
+  updateProject,
   updateTimeEntry,
 } from "./lib/db/repository";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
 import { WEEKDAY_NAMES } from "./lib/constants";
-import type { Activity, Project, TemplateEntry, TimeEntry } from "./lib/types";
+import { toTime, type Activity, type Project, type TemplateEntry, type TimeEntry } from "./lib/types";
 import "./App.css";
 
 type View = "timesheet" | "template" | "summary";
@@ -65,6 +74,8 @@ export default function App() {
   const [view, setView] = useState<View>("timesheet");
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
+  const [projectEditor, setProjectEditor] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +114,42 @@ export default function App() {
     setProjects((current) => current.map((item) => (
       item.id === project.id ? { ...item, collapsed: !item.collapsed } : item
     )));
+  }
+
+  async function refreshWorkspace() {
+    const [nextProjects, nextActivities] = await Promise.all([listProjects(), listActivities()]);
+    setProjects(nextProjects);
+    setActivities(nextActivities);
+    setArmedActivity((current) => (
+      current ? nextActivities.find(({ id }) => id === current.id) ?? null : null
+    ));
+  }
+
+  async function saveActivity(draft: ActivityDraft) {
+    const projectId = draft.projectId ?? await addProject(draft.newProjectName);
+    if (activityEditor) {
+      await updateActivity({
+        id: activityEditor.id,
+        name: draft.name,
+        jiraKey: draft.jiraKey,
+        defaultDurationMinutes: draft.defaultDurationMinutes,
+        archived: false,
+        projectId,
+        jiraProject: draft.jiraProject,
+        issueType: activityEditor.issueType,
+      });
+    } else {
+      await addActivity({
+        name: draft.name,
+        jiraKey: draft.jiraKey,
+        defaultDurationMinutes: draft.defaultDurationMinutes,
+        archived: false,
+        projectId,
+        jiraProject: draft.jiraProject,
+        issueType: null,
+      });
+    }
+    await refreshWorkspace();
   }
 
   async function saveTimeBlock(draft: TimeBlockDraft) {
@@ -229,6 +276,28 @@ export default function App() {
         </div>
       </header>
 
+      <TimerBar
+        activities={activities}
+        onLog={async (activity, startedAt, duration) => {
+          const startMinutes = startedAt.getHours() * 60 + startedAt.getMinutes();
+          await addTimeEntry({
+            activityId: activity.id,
+            activityLabel: activity.name,
+            date: isoDate(startedAt),
+            startTime: toTime(startMinutes),
+            endTime: toTime(Math.min(startMinutes + duration, 23 * 60 + 59)),
+            notes: "",
+            jiraKey: activity.jiraKey,
+            jiraProject: activity.jiraProject,
+            issueType: activity.issueType,
+          });
+          const currentWeek = startOfWeek(startedAt);
+          if (isoDate(currentWeek) === isoDate(weekStart)) await loadEntries();
+          else setWeekStart(currentWeek);
+          setView("timesheet");
+        }}
+      />
+
       <div className="workspace">
         <Sidebar
           projects={projects}
@@ -236,6 +305,9 @@ export default function App() {
           armedActivity={armedActivity}
           onArm={setArmedActivity}
           onToggleProject={toggleProject}
+          onAddActivity={() => setActivityEditor(null)}
+          onEditActivity={setActivityEditor}
+          onEditProject={setProjectEditor}
         />
 
         <main className="main-content">
@@ -366,6 +438,38 @@ export default function App() {
       </div>
 
       {loading && <div className="loading-bar" aria-label="Loading" />}
+
+      {activityEditor !== undefined && (
+        <ActivityDialog
+          activity={activityEditor}
+          projects={projects}
+          onClose={() => setActivityEditor(undefined)}
+          onSave={saveActivity}
+          onDelete={activityEditor ? async () => {
+            if (!window.confirm(`Delete “${activityEditor.name}”? Existing time blocks will be kept.`)) return;
+            await deleteActivity(activityEditor.id);
+            await refreshWorkspace();
+            setActivityEditor(undefined);
+          } : null}
+        />
+      )}
+
+      {projectEditor && (
+        <ProjectDialog
+          project={projectEditor}
+          onClose={() => setProjectEditor(null)}
+          onSave={async (project) => {
+            await updateProject(project);
+            await refreshWorkspace();
+          }}
+          onDelete={async () => {
+            if (!window.confirm(`Delete “${projectEditor.name}”? Its activities will move to General.`)) return;
+            await deleteProject(projectEditor.id);
+            await refreshWorkspace();
+            setProjectEditor(null);
+          }}
+        />
+      )}
 
       {editor && (
         <TimeBlockDialog
