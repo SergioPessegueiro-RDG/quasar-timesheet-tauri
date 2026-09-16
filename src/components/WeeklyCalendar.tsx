@@ -37,6 +37,13 @@ interface WeeklyCalendarProps {
   entries: TimeEntry[];
   armedActivity: Activity | null;
   onEntriesChanged: () => Promise<void>;
+  onCreate: (initial: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    activityId?: number;
+  }) => void;
+  onEdit: (entry: TimeEntry) => void;
 }
 
 type DragMode = "create" | "move" | "resize-top" | "resize-bottom";
@@ -79,6 +86,8 @@ export function WeeklyCalendar({
   entries,
   armedActivity,
   onEntriesChanged,
+  onCreate,
+  onEdit,
 }: WeeklyCalendarProps) {
   const lanesRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -207,8 +216,24 @@ export function WeeklyCalendar({
     lanesRef.current?.releasePointerCapture(event.pointerId);
     setDragState(null);
 
+    if (finished.mode === "create" && finished.moved) {
+      onCreate({
+        date: dateKeys[finished.anchorDay],
+        startTime: fullTime(finished.previewStart),
+        endTime: fullTime(finished.previewEnd),
+        activityId: armedActivity?.id,
+      });
+      return;
+    }
     if (finished.mode === "create") {
-      if (!armedActivity) return;
+      if (!armedActivity) {
+        onCreate({
+          date: dateKeys[finished.anchorDay],
+          startTime: fullTime(finished.anchorMinute),
+          endTime: fullTime(Math.min(TOTAL_MINUTES, finished.anchorMinute + SLOT_MINUTES)),
+        });
+        return;
+      }
       const start = finished.moved ? finished.previewStart : finished.anchorMinute;
       const defaultDuration = armedActivity.defaultDurationMinutes ?? SLOT_MINUTES;
       const end = finished.moved
@@ -361,6 +386,11 @@ export function WeeklyCalendar({
                         style={style}
                         key={entry.id}
                         onPointerDown={(event) => beginBlockDrag(event, entry)}
+                        onDoubleClick={() => onEdit(entry)}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          onEdit(entry);
+                        }}
                         title={`${entry.activityName}\n${entry.startTime}–${entry.endTime}${entry.notes ? `\n${entry.notes}` : ""}`}
                       >
                         <strong>{entry.activityName}{entry.jiraKey ? ` · ${entry.jiraKey}` : ""}</strong>

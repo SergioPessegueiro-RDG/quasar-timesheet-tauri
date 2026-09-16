@@ -1,18 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
+import { ExportDialog } from "./components/ExportDialog";
+import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
 import { WeeklyCalendar } from "./components/WeeklyCalendar";
 import { isTauri } from "./lib/db";
 import {
+  addTimeEntry,
+  deleteTimeEntry,
   listActivities,
+  listKnownJiraProjects,
   listProjects,
   listTimeEntries,
   setProjectCollapsed,
+  updateTimeEntry,
 } from "./lib/db/repository";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
 import type { Activity, Project, TimeEntry } from "./lib/types";
 import "./App.css";
 
 type View = "timesheet" | "template" | "summary";
+type EditorState = {
+  entry: TimeEntry | null;
+  initial: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    activityId?: number;
+  };
+};
 
 function weekTitle(monday: Date): string {
   const friday = addDays(monday, 4);
@@ -29,9 +44,12 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [knownJiraProjects, setKnownJiraProjects] = useState<string[]>([]);
   const [armedActivity, setArmedActivity] = useState<Activity | null>(null);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<View>("timesheet");
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,10 +60,11 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([listProjects(), listActivities(), loadEntries()])
-      .then(([p, a]) => {
+    Promise.all([listProjects(), listActivities(), listKnownJiraProjects(), loadEntries()])
+      .then(([p, a, jiraProjects]) => {
         setProjects(p);
         setActivities(a);
+        setKnownJiraProjects(jiraProjects);
         setError(null);
       })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
@@ -66,6 +85,39 @@ export default function App() {
     setProjects((current) => current.map((item) => (
       item.id === project.id ? { ...item, collapsed: !item.collapsed } : item
     )));
+  }
+
+  async function saveTimeBlock(draft: TimeBlockDraft) {
+    const activity = activities.find(({ id }) => id === draft.activityId);
+    if (!activity) throw new Error("The selected activity no longer exists.");
+    if (editor?.entry) {
+      await updateTimeEntry({
+        ...editor.entry,
+        activityId: activity.id,
+        activityName: activity.name,
+        color: activity.color,
+        date: draft.date,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        notes: draft.notes,
+        jiraKey: draft.jiraKey,
+        jiraProject: draft.jiraProject,
+        issueType: null,
+      });
+    } else {
+      await addTimeEntry({
+        activityId: activity.id,
+        activityLabel: activity.name,
+        date: draft.date,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        notes: draft.notes,
+        jiraKey: draft.jiraKey,
+        jiraProject: draft.jiraProject,
+        issueType: null,
+      });
+    }
+    await loadEntries();
   }
 
   const totalHours = useMemo(
@@ -137,7 +189,7 @@ export default function App() {
                   <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))}>Today</button>
                   <button type="button" aria-label="Next week" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
                 </div>
-                <button className="primary-button" type="button">Export CSV</button>
+                <button className="primary-button" type="button" onClick={() => setExportOpen(true)}>Export CSV</button>
               </div>
             )}
           </div>
@@ -155,6 +207,16 @@ export default function App() {
                 entries={entries}
                 armedActivity={armedActivity}
                 onEntriesChanged={loadEntries}
+                onCreate={(initial) => setEditor({ entry: null, initial })}
+                onEdit={(entry) => setEditor({
+                  entry,
+                  initial: {
+                    date: entry.date,
+                    startTime: entry.startTime,
+                    endTime: entry.endTime,
+                    activityId: entry.activityId ?? undefined,
+                  },
+                })}
               />
             </>
           ) : (
@@ -168,6 +230,30 @@ export default function App() {
       </div>
 
       {loading && <div className="loading-bar" aria-label="Loading" />}
+
+      {editor && (
+        <TimeBlockDialog
+          key={`${editor.entry?.id ?? "new"}-${editor.initial.date}-${editor.initial.startTime}`}
+          entry={editor.entry}
+          initial={editor.initial}
+          activities={activities}
+          knownJiraProjects={knownJiraProjects}
+          onClose={() => setEditor(null)}
+          onSave={saveTimeBlock}
+          onDelete={editor.entry ? async () => {
+            await deleteTimeEntry(editor.entry!.id);
+            await loadEntries();
+          } : null}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportDialog
+          initialStart={isoDate(weekStart)}
+          initialEnd={isoDate(addDays(weekStart, 4))}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </div>
   );
 }

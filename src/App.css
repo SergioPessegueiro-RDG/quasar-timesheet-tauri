@@ -790,6 +790,221 @@ button:focus-visible {
   font-size: 11px;
 }
 
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(4 6 12 / 58%);
+  backdrop-filter: blur(5px);
+  animation: backdrop-in 120ms ease-out;
+}
+
+.dialog {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--panel-raised);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 35%);
+  animation: dialog-in 150ms ease-out;
+}
+
+.compact-dialog {
+  width: min(500px, 100%);
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.dialog-heading h2 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.dialog-close {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 19px;
+}
+
+.dialog form,
+.dialog label {
+  display: grid;
+}
+
+.dialog form {
+  gap: 15px;
+}
+
+.dialog label {
+  min-width: 0;
+  gap: 6px;
+}
+
+.dialog label > span {
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.dialog input,
+.dialog select,
+.dialog textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--panel-muted);
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+}
+
+.dialog input,
+.dialog select {
+  height: 38px;
+  padding: 0 10px;
+}
+
+.dialog textarea {
+  min-height: 88px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.dialog input:focus,
+.dialog select:focus,
+.dialog textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.prefixed-input {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--panel-muted);
+}
+
+.prefixed-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.prefixed-input b {
+  padding-left: 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.prefixed-input input {
+  border: 0;
+  box-shadow: none;
+}
+
+.prefixed-input input:focus {
+  box-shadow: none;
+}
+
+.form-error,
+.export-message {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.form-error {
+  color: #df6b72;
+  background: color-mix(in srgb, #df6b72 10%, transparent);
+}
+
+.export-message {
+  color: var(--text-soft);
+  background: var(--accent-soft);
+}
+
+.dialog-actions {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+
+.dialog-actions button {
+  height: 35px;
+  padding: 0 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dialog-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.secondary-button,
+.danger-button {
+  border: 1px solid var(--line-strong);
+  background: var(--panel-muted);
+}
+
+.secondary-button:hover {
+  background: var(--line);
+}
+
+.danger-button {
+  color: #df6b72;
+}
+
+.danger-button:hover {
+  border-color: color-mix(in srgb, #df6b72 45%, var(--line));
+  background: color-mix(in srgb, #df6b72 9%, var(--panel));
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
 .loading-bar {
   position: fixed;
   top: 67px;
@@ -866,6 +1081,10 @@ button:focus-visible {
     z-index: 20;
     transform: translateX(-50%);
     box-shadow: var(--shadow);
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
   }
 }
 
