@@ -14,6 +14,7 @@ interface SettingsDialogProps {
   onClose: () => void;
   onExportCsv: () => void;
   onImportOutlook: () => void;
+  onShowWelcome: () => void;
   onSyncJira: (credentials: JiraCredentials) => Promise<string>;
   onJiraConfigured: (configured: boolean) => void;
   onSave: (
@@ -34,6 +35,7 @@ export function SettingsDialog({
   onClose,
   onExportCsv,
   onImportOutlook,
+  onShowWelcome,
   onSyncJira,
   onJiraConfigured,
   onSave,
@@ -207,7 +209,7 @@ export function SettingsDialog({
             <section className="settings-section jira-settings">
           <div>
             <strong>Jira connection</strong>
-            <p>Syncs open QDMs assigned to you and your Jira worklogs for the visible week.</p>
+            <p>Syncs assigned active and closed QDMs, plus your Jira worklogs for the visible week.</p>
           </div>
           <label>
             <span>Jira site</span>
@@ -275,6 +277,14 @@ export function SettingsDialog({
             <p>Export dated worklogs for Jira's CSV importer.</p>
           </div>
           <button className="secondary-button" type="button" onClick={onExportCsv}>Export CSV…</button>
+            </section>
+
+            <section className="settings-section settings-action-section">
+              <div>
+                <strong>Welcome setup</strong>
+                <p>Review Jira and Outlook connection details.</p>
+              </div>
+              <button className="secondary-button" type="button" onClick={onShowWelcome}>Open setup…</button>
             </section>
 
             <section className="settings-section settings-action-section app-version-section">

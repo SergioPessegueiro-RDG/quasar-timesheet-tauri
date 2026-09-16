@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  clearOutlookFeedCache,
   fetchOutlookFeed,
+  fetchOutlookFeedCached,
   outlookFeedUrl,
   outlookRequestUrl,
   parseOutlookFeedList,
@@ -103,4 +105,18 @@ test("Outlook feed fetch requests calendar content without exposing another orig
   );
   assert.equal(requested, "https://outlook.live.com/owa/calendar/id/calendar.ics");
   assert.equal(text, calendar);
+});
+
+test("Outlook feeds are reused while navigating between weeks", async () => {
+  clearOutlookFeedCache();
+  let requests = 0;
+  const fetcher: typeof fetch = async () => {
+    requests++;
+    return new Response(calendar);
+  };
+  const url = "https://outlook.live.com/owa/calendar/id/calendar.ics";
+
+  assert.equal(await fetchOutlookFeedCached(url, fetcher, 1_000), calendar);
+  assert.equal(await fetchOutlookFeedCached(url, fetcher, 2_000), calendar);
+  assert.equal(requests, 1);
 });

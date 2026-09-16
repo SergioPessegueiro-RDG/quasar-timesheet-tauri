@@ -18,6 +18,7 @@ import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
 import { TimerBar } from "./components/TimerBar";
 import { WeeklyCalendar } from "./components/WeeklyCalendar";
+import { WelcomePage } from "./components/WelcomePage";
 import { isTauri } from "./lib/db";
 import { checkForAppUpdate } from "./lib/updater";
 import { clampSidebarWidth, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from "./lib/layout";
@@ -69,7 +70,8 @@ import {
   WEEKEND_NAMES,
 } from "./lib/constants";
 import {
-  fetchOutlookFeed,
+  clearOutlookFeedCache,
+  fetchOutlookFeedCached,
   parseOutlookFeedList,
   parseOutlookIcs,
   type OutlookEvent,
@@ -135,6 +137,8 @@ export default function App() {
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
   const [projectEditor, setProjectEditor] = useState<Project | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [welcomeCompleted, setWelcomeCompleted] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showTimer, setShowTimer] = useState(true);
   const [startHour, setStartHour] = useState(DEFAULT_START_HOUR);
@@ -148,9 +152,17 @@ export default function App() {
     return clampSidebarWidth(preferredWidth, window.innerWidth);
   });
   const [loading, setLoading] = useState(true);
+  const [entriesLoading, setEntriesLoading] = useState(false);
+  const [outlookLoading, setOutlookLoading] = useState(false);
+  const [jiraWeekLoading, setJiraWeekLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const jiraAutoSyncStarted = useRef(false);
   const jiraSyncInFlight = useRef<Promise<string> | null>(null);
+  const entriesRequestId = useRef(0);
+  const outlookRequestId = useRef(0);
+  const jiraWeekRequestId = useRef(0);
+  const jiraLoadedWeeks = useRef(new Set<string>());
+  const jiraIssuesLoaded = useRef(false);
+  const jiraUserId = useRef<string | null>(null);
   const sidebarResize = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
@@ -164,18 +176,30 @@ export default function App() {
   }, [sidebarWidth]);
 
   const loadEntries = useCallback(async () => {
+    const requestId = ++entriesRequestId.current;
     const end = addDays(weekStart, showWeekends ? 6 : 4);
-    setEntries(await listTimeEntries(isoDate(weekStart), isoDate(end)));
+    setEntriesLoading(true);
+    try {
+      const nextEntries = await listTimeEntries(isoDate(weekStart), isoDate(end));
+      if (requestId === entriesRequestId.current) setEntries(nextEntries);
+    } finally {
+      if (requestId === entriesRequestId.current) setEntriesLoading(false);
+    }
   }, [showWeekends, weekStart]);
   const loadTemplate = useCallback(async () => {
     setTemplateEntries(await listTemplateEntries());
   }, []);
-  const loadOutlookGuides = useCallback(async () => {
+  const loadOutlookGuides = useCallback(async (refresh = false) => {
+    const requestId = ++outlookRequestId.current;
+    setOutlookLoading(true);
     try {
+      if (refresh) clearOutlookFeedCache();
       const saved = await getSetting("outlook_ics_urls");
       if (!saved) {
-        setOutlookGuides([]);
-        setOutlookGuideMessage("");
+        if (requestId === outlookRequestId.current) {
+          setOutlookGuides([]);
+          setOutlookGuideMessage("");
+        }
         return;
       }
       const value: unknown = JSON.parse(saved);
@@ -185,12 +209,18 @@ export default function App() {
       const feeds = parseOutlookFeedList(value.join("\n"));
       const start = isoDate(weekStart);
       const end = isoDate(addDays(weekStart, showWeekends ? 6 : 4));
-      const calendars = await Promise.all(feeds.map((url) => fetchOutlookFeed(url)));
-      setOutlookGuides(calendars.flatMap((contents) => parseOutlookIcs(contents, start, end).events));
-      setOutlookGuideMessage("");
+      const calendars = await Promise.all(feeds.map((url) => fetchOutlookFeedCached(url)));
+      if (requestId === outlookRequestId.current) {
+        setOutlookGuides(calendars.flatMap((contents) => parseOutlookIcs(contents, start, end).events));
+        setOutlookGuideMessage("");
+      }
     } catch (cause) {
-      setOutlookGuides([]);
-      setOutlookGuideMessage(cause instanceof Error ? cause.message : String(cause));
+      if (requestId === outlookRequestId.current) {
+        setOutlookGuides([]);
+        setOutlookGuideMessage(cause instanceof Error ? cause.message : String(cause));
+      }
+    } finally {
+      if (requestId === outlookRequestId.current) setOutlookLoading(false);
     }
   }, [showWeekends, weekStart]);
 
@@ -236,7 +266,6 @@ export default function App() {
       listProjects(),
       listActivities(),
       listKnownJiraProjects(),
-      loadEntries(),
       loadTemplate(),
       getSetting("theme_mode"),
       getSetting("show_timer"),
@@ -246,11 +275,12 @@ export default function App() {
       getSetting("jira_base_url"),
       getSetting("jira_email"),
       getSetting("jira_api_token"),
+      getSetting("welcome_completed"),
     ])
       .then(([
-        p, a, jiraProjects, , , savedTheme, savedShowTimer,
+        p, a, jiraProjects, , savedTheme, savedShowTimer,
         savedStartHour, savedEndHour, savedShowWeekends,
-        savedJiraUrl, savedJiraEmail, savedJiraToken,
+        savedJiraUrl, savedJiraEmail, savedJiraToken, savedWelcomeCompleted,
       ]) => {
         setProjects(p);
         setActivities(a);
@@ -265,11 +295,13 @@ export default function App() {
         }
         setShowWeekends(savedShowWeekends === "1");
         setJiraConnected(Boolean(savedJiraUrl && savedJiraEmail && savedJiraToken));
+        setWelcomeCompleted(savedWelcomeCompleted === "1");
+        setWelcomeOpen(savedWelcomeCompleted !== "1");
         setError(null);
       })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setLoading(false));
-  }, [loadEntries, loadTemplate]);
+  }, [loadTemplate]);
 
   useEffect(() => {
     if (theme === "system") delete document.documentElement.dataset.theme;
@@ -282,10 +314,53 @@ export default function App() {
   }, [loadOutlookGuides]);
 
   useEffect(() => {
-    if (loading || jiraAutoSyncStarted.current) return;
-    jiraAutoSyncStarted.current = true;
-    void syncJira(undefined, true);
-  }, [loading]);
+    void loadEntries();
+  }, [loadEntries]);
+
+  useEffect(() => {
+    if (loading || !jiraConnected) return;
+    const start = isoDate(weekStart);
+    const end = isoDate(addDays(weekStart, showWeekends ? 6 : 4));
+    const rangeKey = `${start}:${end}`;
+    if (jiraLoadedWeeks.current.has(rangeKey)) {
+      setJiraWeekLoading(false);
+      return;
+    }
+
+    const requestId = ++jiraWeekRequestId.current;
+    let active = true;
+    setJiraWeekLoading(true);
+    void (async () => {
+      const credentials = {
+        baseUrl: await getSetting("jira_base_url") ?? "",
+        email: await getSetting("jira_email") ?? "",
+        apiToken: await getSetting("jira_api_token") ?? "",
+      };
+      if (!credentials.baseUrl || !credentials.email || !credentials.apiToken) return;
+      const accountId = jiraUserId.current
+        ?? (jiraUserId.current = (await testJiraConnection(credentials)).accountId);
+      const [issues, worklogs] = await Promise.all([
+        jiraIssuesLoaded.current ? Promise.resolve([]) : fetchAssignedJiraIssues(credentials),
+        fetchJiraWorklogs(credentials, accountId, start, end),
+      ]);
+      await syncJiraData(issues, worklogs);
+      jiraIssuesLoaded.current = true;
+      jiraLoadedWeeks.current.add(rangeKey);
+      if (active && requestId === jiraWeekRequestId.current) {
+        await Promise.all([refreshWorkspace(), loadEntries()]);
+        setJiraSyncMessage("");
+      }
+    })().catch((cause) => {
+      if (active && requestId === jiraWeekRequestId.current) {
+        setJiraSyncMessage(`Jira history failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      }
+    }).finally(() => {
+      if (active && requestId === jiraWeekRequestId.current) setJiraWeekLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [jiraConnected, loading, loadEntries, showWeekends, weekStart]);
 
   async function toggleProject(project: Project) {
     await setProjectCollapsed(project.id, !project.collapsed);
@@ -332,6 +407,7 @@ export default function App() {
 
       setJiraSyncMessage("Syncing Jira…");
       const user = await testJiraConnection(saved);
+      jiraUserId.current = user.accountId;
       const start = isoDate(weekStart);
       const end = isoDate(addDays(weekStart, showWeekends ? 6 : 4));
       const [issues, worklogs] = await Promise.all([
@@ -339,6 +415,8 @@ export default function App() {
         fetchJiraWorklogs(saved, user.accountId, start, end),
       ]);
       await syncJiraData(issues, worklogs);
+      jiraIssuesLoaded.current = true;
+      jiraLoadedWeeks.current.add(`${start}:${end}`);
       await Promise.all([refreshWorkspace(), loadEntries()]);
       setJiraConnected(true);
       setArmedActivity(null);
@@ -584,6 +662,34 @@ export default function App() {
     );
   }
 
+  if (loading) {
+    return (
+      <main className="startup-page" aria-label="Loading QUASAR Timesheet Manager">
+        <div className="welcome-logo" aria-hidden="true">Q</div>
+        <i aria-hidden="true" />
+      </main>
+    );
+  }
+
+  if (welcomeOpen) {
+    return (
+      <WelcomePage
+        returning={welcomeCompleted}
+        onComplete={async (jira) => {
+          setWelcomeCompleted(true);
+          setWelcomeOpen(false);
+          setJiraConnected(Boolean(jira));
+          await loadOutlookGuides(true);
+        }}
+        onSkip={async () => {
+          await setSetting("welcome_completed", "1");
+          setWelcomeCompleted(true);
+          setWelcomeOpen(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -715,6 +821,14 @@ export default function App() {
                 {armedActivity
                   ? <>Click or drag the grid to place <strong>{armedActivity.name}</strong>. Press Esc to cancel.</>
                   : "Choose an activity on the left, then click or drag the grid."}
+                <div className="week-loading-indicators" aria-live="polite">
+                  {(entriesLoading || jiraWeekLoading) && (
+                    <span className="week-loading-item"><i aria-hidden="true" />Loading logged QDMs…</span>
+                  )}
+                  {outlookLoading && (
+                    <span className="week-loading-item"><i aria-hidden="true" />Loading Outlook events…</span>
+                  )}
+                </div>
               </div>
               <WeeklyCalendar
                 weekStart={weekStart}
@@ -807,8 +921,6 @@ export default function App() {
         </main>
       </div>
 
-      {loading && <div className="loading-bar" aria-label="Loading" />}
-
       {activityEditor !== undefined && (
         <ActivityDialog
           activity={activityEditor}
@@ -858,6 +970,10 @@ export default function App() {
           onImportOutlook={() => {
             setSettingsOpen(false);
             setOutlookImportOpen(true);
+          }}
+          onShowWelcome={() => {
+            setSettingsOpen(false);
+            setWelcomeOpen(true);
           }}
           onSyncJira={syncJira}
           onJiraConfigured={setJiraConnected}
@@ -927,7 +1043,7 @@ export default function App() {
 
       {outlookImportOpen && (
         <OutlookImportDialog
-          onSaved={loadOutlookGuides}
+          onSaved={() => loadOutlookGuides(true)}
           onClose={() => setOutlookImportOpen(false)}
         />
       )}

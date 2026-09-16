@@ -2,6 +2,8 @@ import ICAL from "ical.js";
 
 export const MAX_ICS_BYTES = 5 * 1024 * 1024;
 const MAX_OCCURRENCES = 5_000;
+const FEED_CACHE_MS = 5 * 60 * 1_000;
+const feedCache = new Map<string, { expiresAt: number; request: Promise<string> }>();
 const OUTLOOK_FEED_HOSTS = new Set([
   "outlook.office365.com",
   "outlook.office.com",
@@ -73,6 +75,29 @@ export async function fetchOutlookFeed(url: string, fetcher?: typeof fetch): Pro
     throw cause;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+export function clearOutlookFeedCache(): void {
+  feedCache.clear();
+}
+
+export async function fetchOutlookFeedCached(
+  url: string,
+  fetcher?: typeof fetch,
+  now = Date.now(),
+): Promise<string> {
+  const safeUrl = outlookFeedUrl(url);
+  const cached = feedCache.get(safeUrl);
+  if (cached && cached.expiresAt > now) return cached.request;
+
+  const request = fetchOutlookFeed(safeUrl, fetcher);
+  feedCache.set(safeUrl, { expiresAt: now + FEED_CACHE_MS, request });
+  try {
+    return await request;
+  } catch (cause) {
+    if (feedCache.get(safeUrl)?.request === request) feedCache.delete(safeUrl);
+    throw cause;
   }
 }
 
