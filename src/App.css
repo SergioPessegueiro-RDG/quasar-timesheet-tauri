@@ -809,6 +809,41 @@ button:focus-visible {
   background-color: var(--today);
 }
 
+.outlook-guide {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  z-index: 1;
+  min-height: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 4px 6px;
+  border: 1px dashed var(--text-muted);
+  border-radius: 6px;
+  color: var(--text-soft);
+  background: color-mix(in srgb, var(--text-muted) 12%, var(--panel));
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.outlook-guide strong,
+.outlook-guide small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outlook-guide strong {
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.outlook-guide small {
+  margin-top: auto;
+  font-size: 8px;
+}
+
 .now-line {
   position: absolute;
   right: 0;

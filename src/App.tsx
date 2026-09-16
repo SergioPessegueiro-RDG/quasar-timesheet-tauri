@@ -45,6 +45,12 @@ import {
   WEEKDAY_NAMES,
   WEEKEND_NAMES,
 } from "./lib/constants";
+import {
+  fetchOutlookFeed,
+  parseOutlookFeedList,
+  parseOutlookIcs,
+  type OutlookEvent,
+} from "./lib/outlook";
 import { toTime, type Activity, type Project, type TemplateEntry, type TimeEntry } from "./lib/types";
 import "./App.css";
 
@@ -88,6 +94,8 @@ export default function App() {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [outlookImportOpen, setOutlookImportOpen] = useState(false);
+  const [outlookGuides, setOutlookGuides] = useState<OutlookEvent[]>([]);
+  const [outlookGuideMessage, setOutlookGuideMessage] = useState("");
   const [jiraUploading, setJiraUploading] = useState(false);
   const [jiraUploadMessage, setJiraUploadMessage] = useState("");
   const [activityEditor, setActivityEditor] = useState<Activity | null | undefined>(undefined);
@@ -108,6 +116,29 @@ export default function App() {
   const loadTemplate = useCallback(async () => {
     setTemplateEntries(await listTemplateEntries());
   }, []);
+  const loadOutlookGuides = useCallback(async () => {
+    try {
+      const saved = await getSetting("outlook_ics_urls");
+      if (!saved) {
+        setOutlookGuides([]);
+        setOutlookGuideMessage("");
+        return;
+      }
+      const value: unknown = JSON.parse(saved);
+      if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+        throw new Error("The saved Outlook calendar links are invalid.");
+      }
+      const feeds = parseOutlookFeedList(value.join("\n"));
+      const start = isoDate(weekStart);
+      const end = isoDate(addDays(weekStart, showWeekends ? 6 : 4));
+      const calendars = await Promise.all(feeds.map((url) => fetchOutlookFeed(url)));
+      setOutlookGuides(calendars.flatMap((contents) => parseOutlookIcs(contents, start, end).events));
+      setOutlookGuideMessage("");
+    } catch (cause) {
+      setOutlookGuides([]);
+      setOutlookGuideMessage(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [showWeekends, weekStart]);
 
   useEffect(() => {
     setLoading(true);
@@ -150,6 +181,10 @@ export default function App() {
     else document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme === "system" ? "light dark" : theme;
   }, [theme]);
+
+  useEffect(() => {
+    void loadOutlookGuides();
+  }, [loadOutlookGuides]);
 
   async function toggleProject(project: Project) {
     await setProjectCollapsed(project.id, !project.collapsed);
@@ -434,6 +469,7 @@ export default function App() {
 
           {view === "timesheet" ? (
             <>
+              {outlookGuideMessage && <p className="integration-message" role="status">{outlookGuideMessage}</p>}
               {jiraUploadMessage && <p className="integration-message" role="status">{jiraUploadMessage}</p>}
               <div className={`placement-hint${armedActivity ? " is-active" : ""}`} role="status">
                 <span>{armedActivity ? "＋" : "↖"}</span>
@@ -444,6 +480,7 @@ export default function App() {
               <WeeklyCalendar
                 weekStart={weekStart}
                 entries={entries}
+                guides={outlookGuides}
                 activities={activities}
                 armedActivity={armedActivity}
                 dayNames={dayNames}
@@ -651,10 +688,7 @@ export default function App() {
 
       {outlookImportOpen && (
         <OutlookImportDialog
-          activities={activities}
-          initialStart={isoDate(weekStart)}
-          initialEnd={isoDate(addDays(weekStart, showWeekends ? 6 : 4))}
-          onImported={loadEntries}
+          onSaved={loadOutlookGuides}
           onClose={() => setOutlookImportOpen(false)}
         />
       )}

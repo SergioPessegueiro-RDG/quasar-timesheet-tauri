@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchOutlookFeed, outlookFeedUrl, parseOutlookIcs } from "./outlook.ts";
+import {
+  fetchOutlookFeed,
+  outlookFeedUrl,
+  parseOutlookFeedList,
+  parseOutlookIcs,
+} from "./outlook.ts";
 
 const calendar = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -56,6 +61,24 @@ test("Outlook feed links accept Microsoft HTTPS and reject other hosts", () => {
     "https://outlook.office365.com/owa/calendar/id/calendar.ics",
   );
   assert.throws(() => outlookFeedUrl("https://example.com/private.ics"), /Outlook HTTPS/);
+});
+
+test("Outlook subscriptions normalize, deduplicate, and limit saved links", () => {
+  assert.deepEqual(
+    parseOutlookFeedList(
+      "webcal://outlook.office365.com/owa/calendar/id/calendar.ics\n"
+      + "https://outlook.office365.com/owa/calendar/id/calendar.ics",
+    ),
+    ["https://outlook.office365.com/owa/calendar/id/calendar.ics"],
+  );
+  assert.throws(() => parseOutlookFeedList(""), /at least one/);
+  assert.throws(
+    () => parseOutlookFeedList(Array.from(
+      { length: 11 },
+      (_, index) => `https://outlook.live.com/owa/calendar/${index}/calendar.ics`,
+    ).join("\n")),
+    /up to 10/,
+  );
 });
 
 test("Outlook feed fetch requests calendar content without exposing another origin", async () => {

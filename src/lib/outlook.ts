@@ -33,6 +33,13 @@ export function outlookFeedUrl(value: string): string {
   return url.href;
 }
 
+export function parseOutlookFeedList(value: string): string[] {
+  const links = value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  if (!links.length) throw new Error("Add at least one Outlook calendar link.");
+  if (links.length > 10) throw new Error("You can add up to 10 Outlook calendar links.");
+  return [...new Set(links.map(outlookFeedUrl))];
+}
+
 export async function fetchOutlookFeed(url: string, fetcher?: typeof fetch): Promise<string> {
   const safeUrl = outlookFeedUrl(url);
   const native = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

@@ -82,6 +82,9 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE time_entries ADD COLUMN jira_worklog_id TEXT`,
     `ALTER TABLE time_entries ADD COLUMN jira_uploaded_at TEXT`,
   ],
+  [
+    `DELETE FROM time_entries WHERE external_source = 'outlook'`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

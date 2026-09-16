@@ -158,7 +158,7 @@ export function SettingsDialog({
         <section className="settings-section jira-settings">
           <div>
             <strong>Jira connection</strong>
-            <p>Used when you press Upload Jira. The token stays on this device and is excluded from backups.</p>
+            <p>Stored on this device and used when you press Upload Jira.</p>
           </div>
           <label>
             <span>Jira site</span>

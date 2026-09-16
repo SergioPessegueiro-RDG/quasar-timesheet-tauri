@@ -24,12 +24,14 @@ import {
   snapMinute,
   textColor,
 } from "../lib/calendar";
+import type { OutlookEvent } from "../lib/outlook";
 import type { Activity, TimeEntry } from "../lib/types";
 import { durationMinutes, toMinutes, toTime } from "../lib/types";
 
 interface WeeklyCalendarProps {
   weekStart: Date;
   entries: TimeEntry[];
+  guides?: OutlookEvent[];
   activities: Activity[];
   armedActivity: Activity | null;
   showDates?: boolean;
@@ -89,6 +91,7 @@ function hourLabel(hour: number): string {
 export function WeeklyCalendar({
   weekStart,
   entries,
+  guides = [],
   activities,
   armedActivity,
   showDates = true,
@@ -120,6 +123,7 @@ export function WeeklyCalendar({
   );
   const dateKeys = dates.map(isoDate);
   const entriesByDay = dateKeys.map((date) => entries.filter((entry) => entry.date === date));
+  const guidesByDay = dateKeys.map((date) => guides.filter((guide) => guide.date === date));
   const layouts = entriesByDay.map(layoutOverlaps);
 
   useEffect(() => {
@@ -426,6 +430,22 @@ export function WeeklyCalendar({
               const dayEntries = entriesByDay[dayIndex];
               return (
                 <div className={`day-lane${dateKeys[dayIndex] === today ? " is-today" : ""}`} key={dateKeys[dayIndex]}>
+                  {guidesByDay[dayIndex].map((guide, guideIndex) => (
+                    <div
+                      className="outlook-guide"
+                      role="note"
+                      aria-label={`Outlook: ${guide.title}, ${guide.startTime} to ${guide.endTime}`}
+                      title={`${guide.title}\n${guide.startTime}–${guide.endTime}${guide.notes ? `\n${guide.notes}` : ""}`}
+                      key={`${guide.externalId}-${guideIndex}`}
+                      style={{
+                        top: `${(toMinutes(guide.startTime) / totalMinutes) * 100}%`,
+                        height: `${((toMinutes(guide.endTime) - toMinutes(guide.startTime)) / totalMinutes) * 100}%`,
+                      }}
+                    >
+                      <strong>{guide.title}</strong>
+                      <small>{guide.startTime}–{guide.endTime}</small>
+                    </div>
+                  ))}
                   {showNow && dateKeys[dayIndex] === today && (
                       <div
                         className="now-line"
