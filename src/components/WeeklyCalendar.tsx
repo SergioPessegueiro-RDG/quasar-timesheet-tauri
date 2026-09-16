@@ -377,8 +377,8 @@ export function WeeklyCalendar({
     "--day-count": dayCount,
     "--calendar-min-width": `${64 + dayCount * 140}px`,
     "--calendar-min-height": `${(totalMinutes / SLOT_MINUTES) * 22}px`,
-    "--slot-percent": `${(SLOT_MINUTES / totalMinutes) * 100}%`,
-    "--hour-percent": `${(60 / totalMinutes) * 100}%`,
+    "--slot-height": "22px",
+    "--hour-height": `${(60 / SLOT_MINUTES) * 22}px`,
   } as CSSProperties;
 
   return (

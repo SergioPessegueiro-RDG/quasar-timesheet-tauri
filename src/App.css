@@ -732,11 +732,15 @@ button:focus-visible {
   justify-content: center;
   flex-direction: column;
   gap: 3px;
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   color: var(--text-soft);
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.header-gutter {
+  border-right: 1px solid var(--line-strong);
 }
 
 .day-heading strong {
@@ -812,20 +816,11 @@ button:focus-visible {
   border-right: 1px solid var(--line-strong);
   background-color: var(--panel);
   background-image:
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent calc(var(--slot-percent) - 1px),
-      var(--line) calc(var(--slot-percent) - 1px),
-      var(--line) var(--slot-percent)
-    ),
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent calc(var(--hour-percent) - 1px),
-      var(--line-strong) calc(var(--hour-percent) - 1px),
-      var(--line-strong) var(--hour-percent)
-    );
+    linear-gradient(to bottom, var(--line-strong) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size:
+    100% var(--hour-height),
+    100% var(--slot-height);
 }
 
 .day-lane.is-today {
@@ -1009,11 +1004,11 @@ button:focus-visible {
 .calendar-totals > div {
   display: grid;
   place-items: center;
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
 }
 
 .calendar-totals .time-gutter {
-  border-left: 0;
+  border-right-color: var(--line-strong);
   color: var(--text-muted);
   text-transform: uppercase;
 }
