@@ -1,0 +1,7 @@
+[build]
+# Keep build artifacts inside the project. Cargo compiles each dependency's
+# build script into a fresh executable and runs it; when the target dir was
+# redirected into a sandboxed temp path, Windows refused to execute those
+# ("An Application Control policy has blocked this file", os error 4551) even
+# though the identical build works from here.
+target-dir = "target"

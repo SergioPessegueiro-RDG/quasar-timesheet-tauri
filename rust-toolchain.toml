@@ -1,0 +1,11 @@
+[toolchain]
+# Pinned deliberately, not just for reproducibility: Windows Smart App Control
+# refuses to load unsigned DLLs that have no cloud reputation yet, and every
+# rustc ships an unsigned rustc_driver DLL whose hash is unique per release.
+# A freshly-released toolchain is therefore blocked on such machines until it
+# has been in circulation for a while ("An Application Control policy has
+# blocked this file", os error 4551). Bump this only to a release that has
+# been out for several months.
+# Targets are added by CI per runner rather than listed here, so a Windows
+# machine does not download macOS standard libraries it can never link against.
+channel = "1.94.0"
