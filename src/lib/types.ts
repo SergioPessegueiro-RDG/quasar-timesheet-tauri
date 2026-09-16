@@ -69,6 +69,12 @@ export function requiredWorkDescription(value: string): string {
   return description;
 }
 
+export function isJiraSyncPending(
+  entry: Pick<TimeEntry, "jiraKey" | "jiraWorklogId" | "jiraDirty">,
+): boolean {
+  return Boolean(entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty));
+}
+
 export function isTimeEntry(block: AnyBlock): block is TimeEntry {
   return "date" in block;
 }

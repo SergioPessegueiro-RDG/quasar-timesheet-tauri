@@ -27,7 +27,7 @@ import {
 } from "../lib/calendar";
 import type { OutlookEvent } from "../lib/outlook";
 import type { Activity, TimeEntry } from "../lib/types";
-import { durationMinutes, toMinutes, toTime } from "../lib/types";
+import { durationMinutes, isJiraSyncPending, toMinutes, toTime } from "../lib/types";
 
 interface WeeklyCalendarProps {
   weekStart: Date;
@@ -37,6 +37,7 @@ interface WeeklyCalendarProps {
   armedActivity: Activity | null;
   showDates?: boolean;
   showNow?: boolean;
+  showSyncStatus?: boolean;
   dayNames?: readonly string[];
   startHour?: number;
   endHour?: number;
@@ -97,6 +98,7 @@ export function WeeklyCalendar({
   armedActivity,
   showDates = true,
   showNow = true,
+  showSyncStatus = true,
   dayNames = WEEKDAY_NAMES,
   startHour = DEFAULT_START_HOUR,
   endHour = DEFAULT_END_HOUR,
@@ -485,8 +487,13 @@ export function WeeklyCalendar({
                         }}
                         title={`${entry.activityName}\n${entry.startTime}–${entry.endTime}${entry.notes ? `\n${entry.notes}` : ""}`}
                       >
-                        <strong>{entry.activityName}{entry.jiraKey ? ` · ${entry.jiraKey}` : ""}</strong>
-                        {entry.notes && <span>{entry.notes}</span>}
+                        <div className="time-block-heading">
+                          <strong>{entry.activityName}{entry.jiraKey ? ` · ${entry.jiraKey}` : ""}</strong>
+                          {showSyncStatus && isJiraSyncPending(entry) && (
+                            <span className="time-block-sync-status">Not synced</span>
+                          )}
+                        </div>
+                        {entry.notes && <span className="time-block-description">{entry.notes}</span>}
                         <small>{entry.startTime}–{entry.endTime}</small>
                       </button>
                     );

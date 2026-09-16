@@ -64,7 +64,14 @@ import {
   parseOutlookIcs,
   type OutlookEvent,
 } from "./lib/outlook";
-import { toTime, type Activity, type Project, type TemplateEntry, type TimeEntry } from "./lib/types";
+import {
+  isJiraSyncPending,
+  toTime,
+  type Activity,
+  type Project,
+  type TemplateEntry,
+  type TimeEntry,
+} from "./lib/types";
 import "./App.css";
 
 type View = "timesheet" | "template" | "summary";
@@ -310,7 +317,7 @@ export default function App() {
         return;
       }
 
-      const pending = entries.filter((entry) => entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty));
+      const pending = entries.filter(isJiraSyncPending);
       if (!pending.length) {
         setJiraUploadMessage("No new Jira worklogs in this week.");
         return;
@@ -467,7 +474,7 @@ export default function App() {
     [entries],
   );
   const hasPendingJiraEntries = useMemo(
-    () => entries.some((entry) => Boolean(entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty))),
+    () => entries.some(isJiraSyncPending),
     [entries],
   );
   const visibleProjectIds = useMemo(
@@ -661,6 +668,7 @@ export default function App() {
                 armedActivity={armedActivity}
                 showDates={false}
                 showNow={false}
+                showSyncStatus={false}
                 dayNames={dayNames}
                 startHour={startHour}
                 endHour={endHour}
