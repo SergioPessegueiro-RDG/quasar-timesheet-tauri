@@ -658,8 +658,8 @@ button:focus-visible {
 .calendar-totals {
   flex: none;
   display: grid;
-  grid-template-columns: 64px repeat(5, minmax(140px, 1fr));
-  min-width: 764px;
+  grid-template-columns: 64px repeat(var(--day-count), minmax(140px, 1fr));
+  min-width: var(--calendar-min-width);
 }
 
 .calendar-header {
@@ -702,8 +702,8 @@ button:focus-visible {
 
 .calendar-grid {
   position: relative;
-  min-width: 764px;
-  height: clamp(704px, calc(100vh - 305px), 2048px);
+  min-width: var(--calendar-min-width);
+  height: clamp(var(--calendar-min-height), calc(100vh - 305px), 2048px);
 }
 
 .time-gutter {
@@ -738,7 +738,7 @@ button:focus-visible {
   position: absolute;
   inset: 0 0 0 64px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  grid-template-columns: repeat(var(--day-count), minmax(140px, 1fr));
   outline: none;
   touch-action: none;
   user-select: none;
@@ -752,16 +752,16 @@ button:focus-visible {
     repeating-linear-gradient(
       to bottom,
       transparent 0,
-      transparent calc(3.125% - 1px),
-      var(--line) calc(3.125% - 1px),
-      var(--line) 3.125%
+      transparent calc(var(--slot-percent) - 1px),
+      var(--line) calc(var(--slot-percent) - 1px),
+      var(--line) var(--slot-percent)
     ),
     repeating-linear-gradient(
       to bottom,
       transparent 0,
-      transparent calc(12.5% - 1px),
-      var(--line-strong) calc(12.5% - 1px),
-      var(--line-strong) 12.5%
+      transparent calc(var(--hour-percent) - 1px),
+      var(--line-strong) calc(var(--hour-percent) - 1px),
+      var(--line-strong) var(--hour-percent)
     );
 }
 

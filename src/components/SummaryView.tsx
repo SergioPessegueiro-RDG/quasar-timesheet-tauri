@@ -7,6 +7,7 @@ import { durationMinutes } from "../lib/types";
 interface SummaryViewProps {
   activities: Activity[];
   projects: Project[];
+  showWeekends: boolean;
 }
 
 interface TotalRow {
@@ -20,9 +21,9 @@ function lastDayOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
-function period(anchor: Date, mode: "week" | "month"): [Date, Date] {
+function period(anchor: Date, mode: "week" | "month", showWeekends: boolean): [Date, Date] {
   return mode === "week"
-    ? [startOfWeek(anchor), addDays(startOfWeek(anchor), 4)]
+    ? [startOfWeek(anchor), addDays(startOfWeek(anchor), showWeekends ? 6 : 4)]
     : [new Date(anchor.getFullYear(), anchor.getMonth(), 1), lastDayOfMonth(anchor)];
 }
 
@@ -40,11 +41,11 @@ function group(
   return [...rows.values()].sort((a, b) => b.minutes - a.minutes);
 }
 
-export function SummaryView({ activities, projects }: SummaryViewProps) {
+export function SummaryView({ activities, projects, showWeekends }: SummaryViewProps) {
   const [mode, setMode] = useState<"week" | "month">("week");
   const [anchor, setAnchor] = useState(new Date());
   const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [start, end] = period(anchor, mode);
+  const [start, end] = period(anchor, mode, showWeekends);
 
   useEffect(() => {
     listTimeEntries(isoDate(start), isoDate(end)).then(setEntries);

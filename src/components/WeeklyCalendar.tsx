@@ -24,15 +24,15 @@ import {
 import type { Activity, TimeEntry } from "../lib/types";
 import { durationMinutes, toMinutes, toTime } from "../lib/types";
 
-const TOTAL_MINUTES = (DEFAULT_END_HOUR - DEFAULT_START_HOUR) * 60;
-const DAY_COUNT = WEEKDAY_NAMES.length;
-
 interface WeeklyCalendarProps {
   weekStart: Date;
   entries: TimeEntry[];
   armedActivity: Activity | null;
   showDates?: boolean;
   showNow?: boolean;
+  dayNames?: readonly string[];
+  startHour?: number;
+  endHour?: number;
   onCreate: (initial: {
     date: string;
     startTime: string;
@@ -72,14 +72,6 @@ interface DragState {
   moved: boolean;
 }
 
-function relativeMinute(time: string): number {
-  return toMinutes(time) - DEFAULT_START_HOUR * 60;
-}
-
-function fullTime(relative: number): string {
-  return toTime(DEFAULT_START_HOUR * 60 + relative);
-}
-
 function dateLabel(date: Date): string {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
@@ -96,6 +88,9 @@ export function WeeklyCalendar({
   armedActivity,
   showDates = true,
   showNow = true,
+  dayNames = WEEKDAY_NAMES,
+  startHour = DEFAULT_START_HOUR,
+  endHour = DEFAULT_END_HOUR,
   onCreate,
   onEdit,
   onQuickCreate,
@@ -106,10 +101,14 @@ export function WeeklyCalendar({
   const dragRef = useRef<DragState | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const totalMinutes = (endHour - startHour) * 60;
+  const dayCount = dayNames.length;
+  const relativeMinute = (time: string) => toMinutes(time) - startHour * 60;
+  const fullTime = (relative: number) => toTime(startHour * 60 + relative);
 
   const dates = useMemo(
-    () => WEEKDAY_NAMES.map((_, index) => addDays(weekStart, index)),
-    [weekStart],
+    () => dayNames.map((_, index) => addDays(weekStart, index)),
+    [dayNames, weekStart],
   );
   const dateKeys = dates.map(isoDate);
   const entriesByDay = dateKeys.map((date) => entries.filter((entry) => entry.date === date));
@@ -125,8 +124,8 @@ export function WeeklyCalendar({
     const x = Math.max(0, Math.min(rect.width - 1, event.clientX - rect.left));
     const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
     return {
-      day: Math.max(0, Math.min(DAY_COUNT - 1, Math.floor((x / rect.width) * DAY_COUNT))),
-      minute: snapMinute((y / rect.height) * TOTAL_MINUTES),
+      day: Math.max(0, Math.min(dayCount - 1, Math.floor((x / rect.width) * dayCount))),
+      minute: snapMinute((y / rect.height) * totalMinutes, totalMinutes),
     };
   }
 
@@ -146,7 +145,7 @@ export function WeeklyCalendar({
       endMinute: minute,
       previewDay: day,
       previewStart: minute,
-      previewEnd: Math.min(TOTAL_MINUTES, minute + SLOT_MINUTES),
+      previewEnd: Math.min(totalMinutes, minute + SLOT_MINUTES),
       moved: false,
     });
   }
@@ -201,7 +200,7 @@ export function WeeklyCalendar({
       previewStart = Math.min(currentDrag.anchorMinute, current.minute);
       previewEnd = Math.max(currentDrag.anchorMinute, current.minute);
       if (previewStart === previewEnd) {
-        previewEnd = Math.min(TOTAL_MINUTES, previewStart + SLOT_MINUTES);
+        previewEnd = Math.min(totalMinutes, previewStart + SLOT_MINUTES);
       }
     } else if (currentDrag.mode === "resize-top") {
       previewStart = Math.min(current.minute, currentDrag.endMinute - MIN_BLOCK_MINUTES);
@@ -210,12 +209,12 @@ export function WeeklyCalendar({
     } else {
       const rect = lanesRef.current!.getBoundingClientRect();
       const delta = snapMinute(
-        ((event.clientY - currentDrag.anchorY) / rect.height) * TOTAL_MINUTES,
+        ((event.clientY - currentDrag.anchorY) / rect.height) * totalMinutes,
         Number.POSITIVE_INFINITY,
       );
       const signedDelta = event.clientY < currentDrag.anchorY ? -delta : delta;
       const duration = currentDrag.endMinute - currentDrag.anchorMinute;
-      previewStart = Math.max(0, Math.min(TOTAL_MINUTES - duration, currentDrag.anchorMinute + signedDelta));
+      previewStart = Math.max(0, Math.min(totalMinutes - duration, currentDrag.anchorMinute + signedDelta));
       previewEnd = previewStart + duration;
       previewDay = current.day;
     }
@@ -243,7 +242,7 @@ export function WeeklyCalendar({
         onCreate({
           date: dateKeys[finished.anchorDay],
           startTime: fullTime(finished.anchorMinute),
-          endTime: fullTime(Math.min(TOTAL_MINUTES, finished.anchorMinute + SLOT_MINUTES)),
+          endTime: fullTime(Math.min(totalMinutes, finished.anchorMinute + SLOT_MINUTES)),
         });
         return;
       }
@@ -251,7 +250,7 @@ export function WeeklyCalendar({
       const defaultDuration = armedActivity.defaultDurationMinutes ?? SLOT_MINUTES;
       const end = finished.moved
         ? finished.previewEnd
-        : Math.min(TOTAL_MINUTES, start + defaultDuration);
+        : Math.min(totalMinutes, start + defaultDuration);
       if (end <= start) return;
       await onQuickCreate(
         armedActivity,
@@ -279,8 +278,8 @@ export function WeeklyCalendar({
     const day = dateKeys.indexOf(entry.date);
     const start = relativeMinute(entry.startTime);
     const duration = durationMinutes(entry);
-    const nextDay = Math.max(0, Math.min(DAY_COUNT - 1, day + dayDelta));
-    const nextStart = Math.max(0, Math.min(TOTAL_MINUTES - duration, start + minuteDelta));
+    const nextDay = Math.max(0, Math.min(dayCount - 1, day + dayDelta));
+    const nextStart = Math.max(0, Math.min(totalMinutes - duration, start + minuteDelta));
     if (nextDay === day && nextStart === start) return;
     await onMove(
       entry,
@@ -323,15 +322,22 @@ export function WeeklyCalendar({
   const preview = drag?.moved ? drag : null;
   const today = isoDate(new Date());
   const now = new Date();
-  const nowMinute = now.getHours() * 60 + now.getMinutes() - DEFAULT_START_HOUR * 60;
+  const nowMinute = now.getHours() * 60 + now.getMinutes() - startHour * 60;
+  const calendarStyle = {
+    "--day-count": dayCount,
+    "--calendar-min-width": `${64 + dayCount * 140}px`,
+    "--calendar-min-height": `${(totalMinutes / SLOT_MINUTES) * 22}px`,
+    "--slot-percent": `${(SLOT_MINUTES / totalMinutes) * 100}%`,
+    "--hour-percent": `${(60 / totalMinutes) * 100}%`,
+  } as CSSProperties;
 
   return (
-    <section className="calendar-card" aria-label="Weekly timesheet">
+    <section className="calendar-card" aria-label="Weekly timesheet" style={calendarStyle}>
       <div className="calendar-header">
         <div className="time-gutter header-gutter" />
         {dates.map((date, index) => (
           <div className={`day-heading${isoDate(date) === today ? " is-today" : ""}`} key={dateKeys[index]}>
-            <span>{WEEKDAY_NAMES[index]}</span>
+            <span>{dayNames[index]}</span>
             {showDates && <strong>{dateLabel(date)}</strong>}
           </div>
         ))}
@@ -340,12 +346,12 @@ export function WeeklyCalendar({
       <div className="calendar-scroll">
         <div className="calendar-grid">
           <div className="time-gutter time-labels" aria-hidden="true">
-            {Array.from({ length: DEFAULT_END_HOUR - DEFAULT_START_HOUR + 1 }, (_, index) => (
+            {Array.from({ length: endHour - startHour + 1 }, (_, index) => (
               <span
                 key={index}
-                style={{ top: `${(index / (DEFAULT_END_HOUR - DEFAULT_START_HOUR)) * 100}%` }}
+                style={{ top: `${(index / (endHour - startHour)) * 100}%` }}
               >
-                {hourLabel(DEFAULT_START_HOUR + index)}
+                {hourLabel(startHour + index)}
               </span>
             ))}
           </div>
@@ -354,7 +360,7 @@ export function WeeklyCalendar({
             className="day-lanes"
             ref={lanesRef}
             role="grid"
-            aria-label="Monday to Friday time grid"
+            aria-label={`${dayNames[0]} to ${dayNames[dayNames.length - 1]} time grid`}
             tabIndex={0}
             onPointerDown={beginGridDrag}
             onPointerMove={updateDrag}
@@ -366,10 +372,10 @@ export function WeeklyCalendar({
               const dayEntries = entriesByDay[dayIndex];
               return (
                 <div className={`day-lane${dateKeys[dayIndex] === today ? " is-today" : ""}`} key={dateKeys[dayIndex]}>
-                  {showNow && dateKeys[dayIndex] === today && nowMinute >= 0 && nowMinute <= TOTAL_MINUTES && (
+                  {showNow && dateKeys[dayIndex] === today && nowMinute >= 0 && nowMinute <= totalMinutes && (
                       <div
                         className="now-line"
-                        style={{ top: `${(nowMinute / TOTAL_MINUTES) * 100}%` }}
+                        style={{ top: `${(nowMinute / totalMinutes) * 100}%` }}
                       />
                     )}
                   {dayEntries.map((entry) => {
@@ -379,8 +385,8 @@ export function WeeklyCalendar({
                     const style = {
                       "--block-color": entry.color,
                       "--block-text": textColor(entry.color),
-                      top: `${(relativeMinute(entry.startTime) / TOTAL_MINUTES) * 100}%`,
-                      height: `${(durationMinutes(entry) / TOTAL_MINUTES) * 100}%`,
+                      top: `${(relativeMinute(entry.startTime) / totalMinutes) * 100}%`,
+                      height: `${(durationMinutes(entry) / totalMinutes) * 100}%`,
                       left: `calc(${layout.column * width}% + ${layout.column ? gap / 2 : 3}px)`,
                       width: `calc(${width}% - ${layout.columns > 1 ? gap : 6}px)`,
                     } as CSSProperties;
@@ -409,8 +415,8 @@ export function WeeklyCalendar({
                     <div
                       className={`drag-preview ${preview.mode}`}
                       style={{
-                        top: `${(preview.previewStart / TOTAL_MINUTES) * 100}%`,
-                        height: `${((preview.previewEnd - preview.previewStart) / TOTAL_MINUTES) * 100}%`,
+                        top: `${(preview.previewStart / totalMinutes) * 100}%`,
+                        height: `${((preview.previewEnd - preview.previewStart) / totalMinutes) * 100}%`,
                       }}
                     />
                   )}

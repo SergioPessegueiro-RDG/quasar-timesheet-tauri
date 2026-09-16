@@ -7,8 +7,17 @@ export type ThemeMode = "system" | "light" | "dark";
 interface SettingsDialogProps {
   theme: ThemeMode;
   showTimer: boolean;
+  startHour: number;
+  endHour: number;
+  showWeekends: boolean;
   onClose: () => void;
-  onSave: (theme: ThemeMode, showTimer: boolean) => Promise<void>;
+  onSave: (
+    theme: ThemeMode,
+    showTimer: boolean,
+    startHour: number,
+    endHour: number,
+    showWeekends: boolean,
+  ) => Promise<void>;
 }
 
 function browserDownload(contents: string, filename: string) {
@@ -23,11 +32,17 @@ function browserDownload(contents: string, filename: string) {
 export function SettingsDialog({
   theme: initialTheme,
   showTimer: initialShowTimer,
+  startHour: initialStartHour,
+  endHour: initialEndHour,
+  showWeekends: initialShowWeekends,
   onClose,
   onSave,
 }: SettingsDialogProps) {
   const [theme, setTheme] = useState(initialTheme);
   const [showTimer, setShowTimer] = useState(initialShowTimer);
+  const [startHour, setStartHour] = useState(initialStartHour);
+  const [endHour, setEndHour] = useState(initialEndHour);
+  const [showWeekends, setShowWeekends] = useState(initialShowWeekends);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -99,9 +114,15 @@ export function SettingsDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (endHour <= startHour) return setMessage("The work day must end after it starts.");
     setBusy(true);
-    await onSave(theme, showTimer);
+    await onSave(theme, showTimer, startHour, endHour, showWeekends);
     onClose();
+  }
+
+  function hourLabel(hour: number) {
+    if (hour === 24) return "Midnight";
+    return new Intl.DateTimeFormat(undefined, { hour: "numeric" }).format(new Date(2000, 0, 1, hour));
   }
 
   return (
@@ -137,9 +158,37 @@ export function SettingsDialog({
           </div>
         </section>
 
+        <section className="settings-section">
+          <div>
+            <strong>Calendar</strong>
+            <p>Set the visible work day and optionally include Saturday and Sunday.</p>
+          </div>
+          <div className="form-row work-hours">
+            <label>
+              <span>Starts</span>
+              <select value={startHour} onChange={(event) => setStartHour(Number(event.target.value))}>
+                {Array.from({ length: 24 }, (_, hour) => <option value={hour} key={hour}>{hourLabel(hour)}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Ends</span>
+              <select value={endHour} onChange={(event) => setEndHour(Number(event.target.value))}>
+                {Array.from({ length: 24 }, (_, index) => index + 1).map((hour) => (
+                  <option value={hour} key={hour}>{hourLabel(hour)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
         <label className="settings-toggle">
           <span><strong>Show timer bar</strong><small>Keep the live work timer above the calendar.</small></span>
           <input type="checkbox" checked={showTimer} onChange={(event) => setShowTimer(event.target.checked)} />
+        </label>
+
+        <label className="settings-toggle">
+          <span><strong>Show weekends</strong><small>Include Saturday and Sunday across calendar views.</small></span>
+          <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
         </label>
 
         <section className="settings-section backup-section">

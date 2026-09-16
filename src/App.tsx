@@ -35,7 +35,12 @@ import {
   updateTimeEntry,
 } from "./lib/db/repository";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
-import { WEEKDAY_NAMES } from "./lib/constants";
+import {
+  DEFAULT_END_HOUR,
+  DEFAULT_START_HOUR,
+  WEEKDAY_NAMES,
+  WEEKEND_NAMES,
+} from "./lib/constants";
 import { toTime, type Activity, type Project, type TemplateEntry, type TimeEntry } from "./lib/types";
 import "./App.css";
 
@@ -53,16 +58,17 @@ type EditorState = {
 };
 
 const TEMPLATE_WEEK = new Date(2000, 0, 3);
-const TEMPLATE_DATES = WEEKDAY_NAMES.map((_, index) => isoDate(addDays(TEMPLATE_WEEK, index)));
+const ALL_DAY_NAMES = [...WEEKDAY_NAMES, ...WEEKEND_NAMES];
+const TEMPLATE_DATES = ALL_DAY_NAMES.map((_, index) => isoDate(addDays(TEMPLATE_WEEK, index)));
 
-function weekTitle(monday: Date): string {
-  const friday = addDays(monday, 4);
+function weekTitle(monday: Date, showWeekends: boolean): string {
+  const lastDay = addDays(monday, showWeekends ? 6 : 4);
   const start = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(monday);
   const end = new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(friday);
+  }).format(lastDay);
   return `${start} – ${end}`;
 }
 
@@ -82,13 +88,16 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [showTimer, setShowTimer] = useState(true);
+  const [startHour, setStartHour] = useState(DEFAULT_START_HOUR);
+  const [endHour, setEndHour] = useState(DEFAULT_END_HOUR);
+  const [showWeekends, setShowWeekends] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadEntries = useCallback(async () => {
-    const end = addDays(weekStart, 4);
+    const end = addDays(weekStart, showWeekends ? 6 : 4);
     setEntries(await listTimeEntries(isoDate(weekStart), isoDate(end)));
-  }, [weekStart]);
+  }, [showWeekends, weekStart]);
   const loadTemplate = useCallback(async () => {
     setTemplateEntries(await listTemplateEntries());
   }, []);
@@ -103,13 +112,26 @@ export default function App() {
       loadTemplate(),
       getSetting("theme_mode"),
       getSetting("show_timer"),
+      getSetting("work_start_hour"),
+      getSetting("work_end_hour"),
+      getSetting("show_weekends"),
     ])
-      .then(([p, a, jiraProjects, , , savedTheme, savedShowTimer]) => {
+      .then(([
+        p, a, jiraProjects, , , savedTheme, savedShowTimer,
+        savedStartHour, savedEndHour, savedShowWeekends,
+      ]) => {
         setProjects(p);
         setActivities(a);
         setKnownJiraProjects(jiraProjects);
         if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
         setShowTimer(savedShowTimer !== "0");
+        const nextStart = savedStartHour === null ? Number.NaN : Number(savedStartHour);
+        const nextEnd = savedEndHour === null ? Number.NaN : Number(savedEndHour);
+        if (nextStart >= 0 && nextStart <= 23 && nextEnd > nextStart && nextEnd <= 24) {
+          setStartHour(nextStart);
+          setEndHour(nextEnd);
+        }
+        setShowWeekends(savedShowWeekends === "1");
         setError(null);
       })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
@@ -241,13 +263,14 @@ export default function App() {
     ...entry,
     date: TEMPLATE_DATES[entry.dayOfWeek],
   })), [templateEntries]);
+  const dayNames = showWeekends ? ALL_DAY_NAMES : WEEKDAY_NAMES;
 
   async function applyTemplate() {
     if (!templateEntries.length) {
       window.alert("The Template is empty. Add recurring blocks there first.");
       return;
     }
-    const dates = WEEKDAY_NAMES.map((_, index) => isoDate(addDays(weekStart, index)));
+    const dates = dayNames.map((_, index) => isoDate(addDays(weekStart, index)));
     const result = await applyTemplateToWeek(dates);
     await loadEntries();
     window.alert(
@@ -336,7 +359,7 @@ export default function App() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">{view === "timesheet" ? "Weekly timesheet" : view}</p>
-              <h1>{view === "timesheet" ? weekTitle(weekStart) : view[0].toUpperCase() + view.slice(1)}</h1>
+              <h1>{view === "timesheet" ? weekTitle(weekStart, showWeekends) : view[0].toUpperCase() + view.slice(1)}</h1>
             </div>
 
             {view === "timesheet" && (
@@ -368,6 +391,9 @@ export default function App() {
                 weekStart={weekStart}
                 entries={entries}
                 armedActivity={armedActivity}
+                dayNames={dayNames}
+                startHour={startHour}
+                endHour={endHour}
                 onCreate={(initial) => setEditor({ mode: "timesheet", entry: null, initial })}
                 onEdit={(entry) => setEditor({
                   mode: "timesheet",
@@ -417,6 +443,9 @@ export default function App() {
                 armedActivity={armedActivity}
                 showDates={false}
                 showNow={false}
+                dayNames={dayNames}
+                startHour={startHour}
+                endHour={endHour}
                 onCreate={(initial) => setEditor({ mode: "template", entry: null, initial })}
                 onEdit={(entry) => setEditor({
                   mode: "template",
@@ -454,7 +483,7 @@ export default function App() {
               />
             </>
           ) : (
-            <SummaryView activities={activities} projects={projects} />
+            <SummaryView activities={activities} projects={projects} showWeekends={showWeekends} />
           )}
         </main>
       </div>
@@ -497,14 +526,29 @@ export default function App() {
         <SettingsDialog
           theme={theme}
           showTimer={showTimer}
+          startHour={startHour}
+          endHour={endHour}
+          showWeekends={showWeekends}
           onClose={() => setSettingsOpen(false)}
-          onSave={async (nextTheme, nextShowTimer) => {
+          onSave={async (
+            nextTheme,
+            nextShowTimer,
+            nextStartHour,
+            nextEndHour,
+            nextShowWeekends,
+          ) => {
             await Promise.all([
               setSetting("theme_mode", nextTheme),
               setSetting("show_timer", nextShowTimer ? "1" : "0"),
+              setSetting("work_start_hour", String(nextStartHour)),
+              setSetting("work_end_hour", String(nextEndHour)),
+              setSetting("show_weekends", nextShowWeekends ? "1" : "0"),
             ]);
             setTheme(nextTheme);
             setShowTimer(nextShowTimer);
+            setStartHour(nextStartHour);
+            setEndHour(nextEndHour);
+            setShowWeekends(nextShowWeekends);
           }}
         />
       )}
@@ -517,7 +561,7 @@ export default function App() {
           activities={activities}
           knownJiraProjects={knownJiraProjects}
           dayOptions={editor.mode === "template"
-            ? TEMPLATE_DATES.map((value, index) => ({ value, label: WEEKDAY_NAMES[index] }))
+            ? dayNames.map((label, index) => ({ value: TEMPLATE_DATES[index], label }))
             : undefined}
           onClose={() => setEditor(null)}
           onSave={saveTimeBlock}
@@ -536,7 +580,7 @@ export default function App() {
       {exportOpen && (
         <ExportDialog
           initialStart={isoDate(weekStart)}
-          initialEnd={isoDate(addDays(weekStart, 4))}
+          initialEnd={isoDate(addDays(weekStart, showWeekends ? 6 : 4))}
           onClose={() => setExportOpen(false)}
         />
       )}
