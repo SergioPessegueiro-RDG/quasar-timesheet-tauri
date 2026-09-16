@@ -1,26 +1,37 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { ExportDialog } from "./components/ExportDialog";
+import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
 import { WeeklyCalendar } from "./components/WeeklyCalendar";
 import { isTauri } from "./lib/db";
 import {
   addTimeEntry,
+  addTemplateEntry,
+  applyTemplateToWeek,
+  deleteTemplateEntry,
   deleteTimeEntry,
   listActivities,
   listKnownJiraProjects,
   listProjects,
+  listTemplateEntries,
   listTimeEntries,
+  moveTemplateEntry,
+  moveTimeEntry,
   setProjectCollapsed,
+  updateTemplateEntry,
   updateTimeEntry,
 } from "./lib/db/repository";
 import { addDays, isoDate, startOfWeek } from "./lib/calendar";
-import type { Activity, Project, TimeEntry } from "./lib/types";
+import { WEEKDAY_NAMES } from "./lib/constants";
+import type { Activity, Project, TemplateEntry, TimeEntry } from "./lib/types";
 import "./App.css";
 
 type View = "timesheet" | "template" | "summary";
 type EditorState = {
+  mode: "timesheet" | "template";
   entry: TimeEntry | null;
+  templateEntry?: TemplateEntry;
   initial: {
     date: string;
     startTime: string;
@@ -28,6 +39,9 @@ type EditorState = {
     activityId?: number;
   };
 };
+
+const TEMPLATE_WEEK = new Date(2000, 0, 3);
+const TEMPLATE_DATES = WEEKDAY_NAMES.map((_, index) => isoDate(addDays(TEMPLATE_WEEK, index)));
 
 function weekTitle(monday: Date): string {
   const friday = addDays(monday, 4);
@@ -44,6 +58,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [templateEntries, setTemplateEntries] = useState<TemplateEntry[]>([]);
   const [knownJiraProjects, setKnownJiraProjects] = useState<string[]>([]);
   const [armedActivity, setArmedActivity] = useState<Activity | null>(null);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -57,10 +72,13 @@ export default function App() {
     const end = addDays(weekStart, 4);
     setEntries(await listTimeEntries(isoDate(weekStart), isoDate(end)));
   }, [weekStart]);
+  const loadTemplate = useCallback(async () => {
+    setTemplateEntries(await listTemplateEntries());
+  }, []);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([listProjects(), listActivities(), listKnownJiraProjects(), loadEntries()])
+    Promise.all([listProjects(), listActivities(), listKnownJiraProjects(), loadEntries(), loadTemplate()])
       .then(([p, a, jiraProjects]) => {
         setProjects(p);
         setActivities(a);
@@ -69,7 +87,7 @@ export default function App() {
       })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setLoading(false));
-  }, [loadEntries]);
+  }, [loadEntries, loadTemplate]);
 
   if (error) {
     return (
@@ -90,7 +108,37 @@ export default function App() {
   async function saveTimeBlock(draft: TimeBlockDraft) {
     const activity = activities.find(({ id }) => id === draft.activityId);
     if (!activity) throw new Error("The selected activity no longer exists.");
-    if (editor?.entry) {
+    if (editor?.mode === "template") {
+      const dayOfWeek = TEMPLATE_DATES.indexOf(draft.date);
+      if (editor.templateEntry) {
+        await updateTemplateEntry({
+          ...editor.templateEntry,
+          activityId: activity.id,
+          activityName: activity.name,
+          color: activity.color,
+          dayOfWeek,
+          startTime: draft.startTime,
+          endTime: draft.endTime,
+          notes: draft.notes,
+          jiraKey: draft.jiraKey,
+          jiraProject: draft.jiraProject,
+          issueType: null,
+        });
+      } else {
+        await addTemplateEntry({
+          activityId: activity.id,
+          activityLabel: activity.name,
+          dayOfWeek,
+          startTime: draft.startTime,
+          endTime: draft.endTime,
+          notes: draft.notes,
+          jiraKey: draft.jiraKey,
+          jiraProject: draft.jiraProject,
+          issueType: null,
+        });
+      }
+      await loadTemplate();
+    } else if (editor?.entry) {
       await updateTimeEntry({
         ...editor.entry,
         activityId: activity.id,
@@ -117,7 +165,26 @@ export default function App() {
         issueType: null,
       });
     }
+    if (editor?.mode !== "template") await loadEntries();
+  }
+
+  const templateBlocks = useMemo<TimeEntry[]>(() => templateEntries.map((entry) => ({
+    ...entry,
+    date: TEMPLATE_DATES[entry.dayOfWeek],
+  })), [templateEntries]);
+
+  async function applyTemplate() {
+    if (!templateEntries.length) {
+      window.alert("The Template is empty. Add recurring blocks there first.");
+      return;
+    }
+    const dates = WEEKDAY_NAMES.map((_, index) => isoDate(addDays(weekStart, index)));
+    const result = await applyTemplateToWeek(dates);
     await loadEntries();
+    window.alert(
+      `Added ${result.created} block${result.created === 1 ? "" : "s"}`
+      + (result.skipped.length ? `; skipped ${result.skipped.length} occupied slot${result.skipped.length === 1 ? "" : "s"}.` : "."),
+    );
   }
 
   const totalHours = useMemo(
@@ -189,6 +256,7 @@ export default function App() {
                   <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))}>Today</button>
                   <button type="button" aria-label="Next week" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
                 </div>
+                <button className="secondary-button toolbar-button" type="button" onClick={applyTemplate}>Apply template</button>
                 <button className="primary-button" type="button" onClick={() => setExportOpen(true)}>Export CSV</button>
               </div>
             )}
@@ -206,9 +274,9 @@ export default function App() {
                 weekStart={weekStart}
                 entries={entries}
                 armedActivity={armedActivity}
-                onEntriesChanged={loadEntries}
-                onCreate={(initial) => setEditor({ entry: null, initial })}
+                onCreate={(initial) => setEditor({ mode: "timesheet", entry: null, initial })}
                 onEdit={(entry) => setEditor({
+                  mode: "timesheet",
                   entry,
                   initial: {
                     date: entry.date,
@@ -217,14 +285,82 @@ export default function App() {
                     activityId: entry.activityId ?? undefined,
                   },
                 })}
+                onQuickCreate={async (activity, date, startTime, endTime) => {
+                  await addTimeEntry({
+                    activityId: activity.id,
+                    activityLabel: activity.name,
+                    date,
+                    startTime,
+                    endTime,
+                    notes: "",
+                    jiraKey: activity.jiraKey,
+                    jiraProject: activity.jiraProject,
+                    issueType: activity.issueType,
+                  });
+                  await loadEntries();
+                }}
+                onMove={async (entry, date, startTime, endTime) => {
+                  await moveTimeEntry(entry.id, date, startTime, endTime);
+                  await loadEntries();
+                }}
+                onDelete={async (entry) => {
+                  await deleteTimeEntry(entry.id);
+                  await loadEntries();
+                }}
+              />
+            </>
+          ) : view === "template" ? (
+            <>
+              <div className={`placement-hint${armedActivity ? " is-active" : ""}`} role="status">
+                <span>{armedActivity ? "＋" : "↖"}</span>
+                {armedActivity
+                  ? <>Click or drag to add <strong>{armedActivity.name}</strong> to the recurring week.</>
+                  : "Choose an activity, then build the week you want to reuse."}
+              </div>
+              <WeeklyCalendar
+                weekStart={TEMPLATE_WEEK}
+                entries={templateBlocks}
+                armedActivity={armedActivity}
+                showDates={false}
+                showNow={false}
+                onCreate={(initial) => setEditor({ mode: "template", entry: null, initial })}
+                onEdit={(entry) => setEditor({
+                  mode: "template",
+                  entry,
+                  templateEntry: templateEntries.find(({ id }) => id === entry.id),
+                  initial: {
+                    date: entry.date,
+                    startTime: entry.startTime,
+                    endTime: entry.endTime,
+                    activityId: entry.activityId ?? undefined,
+                  },
+                })}
+                onQuickCreate={async (activity, date, startTime, endTime) => {
+                  await addTemplateEntry({
+                    activityId: activity.id,
+                    activityLabel: activity.name,
+                    dayOfWeek: TEMPLATE_DATES.indexOf(date),
+                    startTime,
+                    endTime,
+                    notes: "",
+                    jiraKey: activity.jiraKey,
+                    jiraProject: activity.jiraProject,
+                    issueType: activity.issueType,
+                  });
+                  await loadTemplate();
+                }}
+                onMove={async (entry, date, startTime, endTime) => {
+                  await moveTemplateEntry(entry.id, TEMPLATE_DATES.indexOf(date), startTime, endTime);
+                  await loadTemplate();
+                }}
+                onDelete={async (entry) => {
+                  await deleteTemplateEntry(entry.id);
+                  await loadTemplate();
+                }}
               />
             </>
           ) : (
-            <section className="coming-soon">
-              <span>{view === "template" ? "▦" : "∑"}</span>
-              <h2>{view === "template" ? "Recurring weekly template" : "Time summary"}</h2>
-              <p>This view is the next slice. The weekly timesheet is ready to use now.</p>
-            </section>
+            <SummaryView activities={activities} projects={projects} />
           )}
         </main>
       </div>
@@ -238,11 +374,19 @@ export default function App() {
           initial={editor.initial}
           activities={activities}
           knownJiraProjects={knownJiraProjects}
+          dayOptions={editor.mode === "template"
+            ? TEMPLATE_DATES.map((value, index) => ({ value, label: WEEKDAY_NAMES[index] }))
+            : undefined}
           onClose={() => setEditor(null)}
           onSave={saveTimeBlock}
           onDelete={editor.entry ? async () => {
-            await deleteTimeEntry(editor.entry!.id);
-            await loadEntries();
+            if (editor.mode === "template") {
+              await deleteTemplateEntry(editor.entry!.id);
+              await loadTemplate();
+            } else {
+              await deleteTimeEntry(editor.entry!.id);
+              await loadEntries();
+            }
           } : null}
         />
       )}

@@ -24,6 +24,7 @@ interface TimeBlockDialogProps {
   };
   activities: Activity[];
   knownJiraProjects: string[];
+  dayOptions?: Array<{ value: string; label: string }>;
   onClose: () => void;
   onSave: (draft: TimeBlockDraft) => Promise<void>;
   onDelete: (() => Promise<void>) | null;
@@ -34,6 +35,7 @@ export function TimeBlockDialog({
   initial,
   activities,
   knownJiraProjects,
+  dayOptions,
   onClose,
   onSave,
   onDelete,
@@ -120,7 +122,15 @@ export function TimeBlockDialog({
           <div className="form-row">
             <label>
               <span>Day</span>
-              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+              {dayOptions ? (
+                <select value={date} onChange={(event) => setDate(event.target.value)}>
+                  {dayOptions.map((option) => (
+                    <option value={option.value} key={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+              )}
             </label>
             <label>
               <span>Jira issue key</span>

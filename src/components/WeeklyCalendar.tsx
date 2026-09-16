@@ -21,11 +21,6 @@ import {
   snapMinute,
   textColor,
 } from "../lib/calendar";
-import {
-  addTimeEntry,
-  deleteTimeEntry,
-  moveTimeEntry,
-} from "../lib/db/repository";
 import type { Activity, TimeEntry } from "../lib/types";
 import { durationMinutes, toMinutes, toTime } from "../lib/types";
 
@@ -36,7 +31,8 @@ interface WeeklyCalendarProps {
   weekStart: Date;
   entries: TimeEntry[];
   armedActivity: Activity | null;
-  onEntriesChanged: () => Promise<void>;
+  showDates?: boolean;
+  showNow?: boolean;
   onCreate: (initial: {
     date: string;
     startTime: string;
@@ -44,6 +40,19 @@ interface WeeklyCalendarProps {
     activityId?: number;
   }) => void;
   onEdit: (entry: TimeEntry) => void;
+  onQuickCreate: (
+    activity: Activity,
+    date: string,
+    startTime: string,
+    endTime: string,
+  ) => Promise<void>;
+  onMove: (
+    entry: TimeEntry,
+    date: string,
+    startTime: string,
+    endTime: string,
+  ) => Promise<void>;
+  onDelete: (entry: TimeEntry) => Promise<void>;
 }
 
 type DragMode = "create" | "move" | "resize-top" | "resize-bottom";
@@ -85,9 +94,13 @@ export function WeeklyCalendar({
   weekStart,
   entries,
   armedActivity,
-  onEntriesChanged,
+  showDates = true,
+  showNow = true,
   onCreate,
   onEdit,
+  onQuickCreate,
+  onMove,
+  onDelete,
 }: WeeklyCalendarProps) {
   const lanesRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -240,30 +253,24 @@ export function WeeklyCalendar({
         ? finished.previewEnd
         : Math.min(TOTAL_MINUTES, start + defaultDuration);
       if (end <= start) return;
-      await addTimeEntry({
-        activityId: armedActivity.id,
-        activityLabel: armedActivity.name,
-        date: dateKeys[finished.anchorDay],
-        startTime: fullTime(start),
-        endTime: fullTime(end),
-        notes: "",
-        jiraKey: armedActivity.jiraKey,
-        jiraProject: armedActivity.jiraProject,
-        issueType: armedActivity.issueType,
-      });
+      await onQuickCreate(
+        armedActivity,
+        dateKeys[finished.anchorDay],
+        fullTime(start),
+        fullTime(end),
+      );
     } else if (!finished.moved) {
       setSelectedId(finished.entry?.id ?? null);
       return;
     } else if (finished.entry) {
-      await moveTimeEntry(
-        finished.entry.id,
+      await onMove(
+        finished.entry,
         dateKeys[finished.previewDay],
         fullTime(finished.previewStart),
         fullTime(finished.previewEnd),
       );
       setSelectedId(finished.entry.id);
     }
-    await onEntriesChanged();
   }
 
   async function nudgeSelected(dayDelta: number, minuteDelta: number) {
@@ -275,13 +282,12 @@ export function WeeklyCalendar({
     const nextDay = Math.max(0, Math.min(DAY_COUNT - 1, day + dayDelta));
     const nextStart = Math.max(0, Math.min(TOTAL_MINUTES - duration, start + minuteDelta));
     if (nextDay === day && nextStart === start) return;
-    await moveTimeEntry(
-      entry.id,
+    await onMove(
+      entry,
       dateKeys[nextDay],
       fullTime(nextStart),
       fullTime(nextStart + duration),
     );
-    await onEntriesChanged();
   }
 
   async function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -297,9 +303,8 @@ export function WeeklyCalendar({
       if (!selected || !window.confirm(
         `Delete “${selected.activityName}” on ${selected.date} at ${selected.startTime}?`,
       )) return;
-      await deleteTimeEntry(selectedId);
+      await onDelete(selected);
       setSelectedId(null);
-      await onEntriesChanged();
       return;
     }
     const moves: Record<string, [number, number]> = {
@@ -327,7 +332,7 @@ export function WeeklyCalendar({
         {dates.map((date, index) => (
           <div className={`day-heading${isoDate(date) === today ? " is-today" : ""}`} key={dateKeys[index]}>
             <span>{WEEKDAY_NAMES[index]}</span>
-            <strong>{dateLabel(date)}</strong>
+            {showDates && <strong>{dateLabel(date)}</strong>}
           </div>
         ))}
       </div>
@@ -361,7 +366,7 @@ export function WeeklyCalendar({
               const dayEntries = entriesByDay[dayIndex];
               return (
                 <div className={`day-lane${dateKeys[dayIndex] === today ? " is-today" : ""}`} key={dateKeys[dayIndex]}>
-                  {dateKeys[dayIndex] === today && nowMinute >= 0 && nowMinute <= TOTAL_MINUTES && (
+                  {showNow && dateKeys[dayIndex] === today && nowMinute >= 0 && nowMinute <= TOTAL_MINUTES && (
                       <div
                         className="now-line"
                         style={{ top: `${(nowMinute / TOTAL_MINUTES) * 100}%` }}
