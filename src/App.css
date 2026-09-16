@@ -1493,13 +1493,28 @@ button:focus-visible {
 }
 
 .settings-dialog {
-  width: min(610px, calc(100vw - 32px));
+  width: min(920px, calc(100vw - 32px));
   display: grid;
   gap: 16px;
 }
 
 .settings-dialog .dialog-heading {
   margin-bottom: 0;
+}
+
+.settings-columns {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.settings-column {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
 }
 
 .settings-section {
@@ -1615,6 +1630,18 @@ button:focus-visible {
   min-height: 36px;
 }
 
+.jira-test-button:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line-strong));
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  font-weight: 700;
+}
+
+.jira-test-button:not(:disabled):hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+}
+
 .jira-action-help,
 .jira-result {
   grid-column: 1 / -1;
@@ -1695,6 +1722,12 @@ button:focus-visible {
   cursor: pointer;
   font-size: 10px;
   font-weight: 700;
+}
+
+.app-version-section > strong {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .prefixed-input {
@@ -1899,6 +1932,12 @@ button:focus-visible {
   .summary-columns {
     grid-template-columns: 1fr;
     overflow: auto;
+  }
+}
+
+@media (max-width: 800px) {
+  .settings-columns {
+    grid-template-columns: 1fr;
   }
 }
 

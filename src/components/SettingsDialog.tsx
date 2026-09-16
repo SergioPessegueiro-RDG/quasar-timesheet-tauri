@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import packageInfo from "../../package.json";
 import { getSetting, setSetting } from "../lib/db/repository";
 import { jiraCloudUrl, testJiraConnection, type JiraCredentials } from "../lib/jira";
 
@@ -144,7 +145,9 @@ export function SettingsDialog({
           </div>
         </div>
 
-        <section className="settings-section">
+        <div className="settings-columns">
+          <div className="settings-column">
+            <section className="settings-section">
           <div>
             <strong>Appearance</strong>
             <p>Follow the operating system or keep one theme.</p>
@@ -164,9 +167,9 @@ export function SettingsDialog({
               </button>
             ))}
           </div>
-        </section>
+            </section>
 
-        <section className="settings-section">
+            <section className="settings-section">
           <div>
             <strong>Calendar</strong>
             <p>Choose the hours shown first. The rest of the day remains available by scrolling.</p>
@@ -187,19 +190,21 @@ export function SettingsDialog({
               </select>
             </label>
           </div>
-        </section>
+            </section>
 
-        <label className="settings-toggle">
-          <span><strong>Show timer bar</strong><small>Keep the live work timer above the calendar.</small></span>
-          <input type="checkbox" checked={showTimer} onChange={(event) => setShowTimer(event.target.checked)} />
-        </label>
+            <label className="settings-toggle">
+              <span><strong>Show timer bar</strong><small>Keep the live work timer above the calendar.</small></span>
+              <input type="checkbox" checked={showTimer} onChange={(event) => setShowTimer(event.target.checked)} />
+            </label>
 
-        <label className="settings-toggle">
-          <span><strong>Show weekends</strong><small>Include Saturday and Sunday across calendar views.</small></span>
-          <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
-        </label>
+            <label className="settings-toggle">
+              <span><strong>Show weekends</strong><small>Include Saturday and Sunday across calendar views.</small></span>
+              <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
+            </label>
+          </div>
 
-        <section className="settings-section jira-settings">
+          <div className="settings-column">
+            <section className="settings-section jira-settings">
           <div>
             <strong>Jira connection</strong>
             <p>Syncs open QDMs assigned to you and your Jira worklogs for the visible week.</p>
@@ -227,7 +232,7 @@ export function SettingsDialog({
           </label>
           <div className="jira-actions">
             <button
-              className="secondary-button"
+              className="secondary-button jira-test-button"
               type="button"
               disabled={busy || jiraAction !== null || !jiraDetailsComplete}
               onClick={() => void runJiraAction("test")}
@@ -254,23 +259,33 @@ export function SettingsDialog({
               {jiraResult.text}
             </p>
           )}
-        </section>
+            </section>
 
-        <section className="settings-section settings-action-section">
+            <section className="settings-section settings-action-section">
           <div>
             <strong>Outlook calendar</strong>
             <p>Configure calendar subscription links and import events.</p>
           </div>
           <button className="secondary-button" type="button" onClick={onImportOutlook}>Configure…</button>
-        </section>
+            </section>
 
-        <section className="settings-section settings-action-section">
+            <section className="settings-section settings-action-section">
           <div>
             <strong>Jira CSV export</strong>
             <p>Export dated worklogs for Jira's CSV importer.</p>
           </div>
           <button className="secondary-button" type="button" onClick={onExportCsv}>Export CSV…</button>
-        </section>
+            </section>
+
+            <section className="settings-section settings-action-section app-version-section">
+              <div>
+                <strong>Application version</strong>
+                <p>Installed QUASAR Timesheet Manager release.</p>
+              </div>
+              <strong>v{packageInfo.version}</strong>
+            </section>
+          </div>
+        </div>
 
         {message && <p className="export-message" role="status">{message}</p>}
         <footer className="dialog-actions">
