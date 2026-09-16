@@ -654,6 +654,7 @@ button:focus-visible {
 }
 
 .jira-button:disabled {
+  pointer-events: none;
   cursor: default;
   opacity: 0.55;
 }
@@ -1570,7 +1571,7 @@ button:focus-visible {
   background: var(--panel-muted);
 }
 
-.secondary-button:hover {
+.secondary-button:not(:disabled):hover {
   background: var(--line);
 }
 
