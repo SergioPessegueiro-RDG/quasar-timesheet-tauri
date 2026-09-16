@@ -621,6 +621,24 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.jira-button,
+.dialog-brand-heading {
+  display: inline-flex;
+  align-items: center;
+}
+
+.jira-button {
+  gap: 7px;
+}
+
+.jira-logo {
+  display: block;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: #2684ff;
+}
+
 .placement-hint {
   flex: none;
   min-height: 30px;
@@ -1109,6 +1127,15 @@ button:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 22px;
+}
+
+.dialog-brand-heading {
+  gap: 11px;
+}
+
+.jira-logo.dialog-logo {
+  width: 29px;
+  height: 29px;
 }
 
 .dialog-heading h2 {

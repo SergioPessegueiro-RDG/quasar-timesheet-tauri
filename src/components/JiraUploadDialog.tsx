@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { getSetting, listTimeEntries, markJiraWorklogUploaded, setSetting } from "../lib/db/repository";
 import { jiraCloudUrl, uploadJiraWorklog } from "../lib/jira";
+import { JiraMark } from "./JiraMark";
 
 interface JiraUploadDialogProps {
   initialStart: string;
@@ -82,9 +83,12 @@ export function JiraUploadDialog({
     }}>
       <section className="dialog compact-dialog" role="dialog" aria-modal="true" aria-labelledby="jira-upload-title">
         <div className="dialog-heading">
-          <div>
-            <p className="eyebrow">Jira Cloud</p>
-            <h2 id="jira-upload-title">Upload worklogs</h2>
+          <div className="dialog-brand-heading">
+            <JiraMark className="dialog-logo" />
+            <div>
+              <p className="eyebrow">Jira Cloud</p>
+              <h2 id="jira-upload-title">Upload worklogs</h2>
+            </div>
           </div>
           <button className="dialog-close" type="button" onClick={onClose} aria-label="Close">×</button>
         </div>

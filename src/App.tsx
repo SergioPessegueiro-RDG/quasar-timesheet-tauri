@@ -6,6 +6,7 @@ import { SettingsDialog, type ThemeMode } from "./components/SettingsDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { OutlookImportDialog } from "./components/OutlookImportDialog";
 import { JiraUploadDialog } from "./components/JiraUploadDialog";
+import { JiraMark } from "./components/JiraMark";
 import { SummaryView } from "./components/SummaryView";
 import { TimeBlockDialog, type TimeBlockDraft } from "./components/TimeBlockDialog";
 import { TimerBar } from "./components/TimerBar";
@@ -379,8 +380,12 @@ export default function App() {
                 </div>
                 <button className="secondary-button toolbar-button" type="button" onClick={applyTemplate}>Apply template</button>
                 <button className="secondary-button toolbar-button" type="button" onClick={() => setOutlookImportOpen(true)}>Import Outlook</button>
-                <button className="secondary-button toolbar-button" type="button" onClick={() => setJiraUploadOpen(true)}>Upload Jira</button>
-                <button className="primary-button" type="button" onClick={() => setExportOpen(true)}>Export CSV</button>
+                <button className="secondary-button toolbar-button jira-button" type="button" onClick={() => setJiraUploadOpen(true)}>
+                  <JiraMark /> Upload Jira
+                </button>
+                <button className="primary-button jira-button" type="button" onClick={() => setExportOpen(true)}>
+                  <JiraMark /> Export CSV
+                </button>
               </div>
             )}
           </div>
