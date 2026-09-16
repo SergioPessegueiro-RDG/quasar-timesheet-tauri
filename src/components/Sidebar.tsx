@@ -63,6 +63,7 @@ export function Sidebar({
                 className="project-heading"
                 type="button"
                 aria-expanded={!project.collapsed}
+                title={project.name}
                 onClick={() => onToggleProject(project)}
               >
                 <span
@@ -70,7 +71,7 @@ export function Sidebar({
                   aria-hidden="true"
                 />
                 <span className="color-dot" style={{ background: project.color }} />
-                <span>{project.name}</span>
+                <span className="project-name">{project.name}</span>
                 <span className="project-count">{children.length}</span>
               </button>
               <button
@@ -93,6 +94,7 @@ export function Sidebar({
                         type="button"
                         draggable
                         aria-pressed={armed}
+                        title={`${activity.name}${activity.jiraKey ? ` · ${activity.jiraKey}` : ""}`}
                         onClick={() => onArm(armed ? null : activity)}
                         onDragStart={(event) => {
                           event.dataTransfer.effectAllowed = "copy";

@@ -491,6 +491,7 @@ button:focus-visible {
   align-items: center;
   gap: 8px;
   padding: 0 7px;
+  overflow: hidden;
   border: 0;
   border-radius: 8px;
   color: var(--text-soft);
@@ -501,6 +502,14 @@ button:focus-visible {
   font-weight: 750;
   letter-spacing: 0.035em;
   text-transform: uppercase;
+}
+
+.project-name {
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-heading:hover {
