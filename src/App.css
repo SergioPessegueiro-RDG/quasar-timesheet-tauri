@@ -510,6 +510,52 @@ button:focus-visible {
   margin-top: 12px;
 }
 
+.archived-folder {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.archive-icon {
+  position: relative;
+  width: 9px;
+  height: 7px;
+  border: 1px solid var(--text-muted);
+  border-radius: 2px;
+  color: var(--text-muted);
+}
+
+.archive-icon::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 1px;
+  width: 4px;
+  height: 3px;
+  border: 1px solid var(--text-muted);
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+.archived-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.archived-project-group {
+  padding-left: 8px;
+}
+
+.activity-row.is-archived {
+  opacity: 0.62;
+  filter: saturate(0.5);
+}
+
+.activity-row.is-archived:hover,
+.activity-row.is-archived.is-armed {
+  opacity: 1;
+}
+
 .project-heading-wrap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px;

@@ -114,7 +114,7 @@ test("Jira worklogs map to local calendar times and stay within one day", () => 
   });
 });
 
-test("Jira sync fetches assigned open QDMs and only the current user's worklogs", async () => {
+test("Jira sync fetches assigned active and closed QDMs and only the current user's worklogs", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const fetcher: typeof fetch = async (url, init) => {
     requests.push({ url: String(url), init });
@@ -204,6 +204,7 @@ test("Jira sync fetches assigned open QDMs and only the current user's worklogs"
     .filter(({ url }) => url.endsWith("/search/jql"))
     .map(({ init }) => JSON.parse(String(init?.body)).jql);
   assert.ok(jqlBodies.some((jql) => jql.includes("assignee = currentUser()")));
+  assert.ok(jqlBodies.some((jql) => jql.includes("status = Closed")));
   assert.ok(jqlBodies.some((jql) => jql.includes("worklogAuthor = currentUser()")));
 });
 

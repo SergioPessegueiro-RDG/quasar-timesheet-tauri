@@ -176,7 +176,7 @@ export function fetchAssignedJiraIssues(
 ): Promise<JiraIssue[]> {
   return searchJiraIssues(
     credentials,
-    "project = QDM AND assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC",
+    "project = QDM AND assignee = currentUser() AND (resolution = Unresolved OR status = Closed) ORDER BY updated DESC",
     fetcher,
   );
 }
