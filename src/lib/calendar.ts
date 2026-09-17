@@ -30,8 +30,22 @@ export function isoDate(value: Date): string {
 export function snapMinute(
   minute: number,
   max = (DEFAULT_END_HOUR - DEFAULT_START_HOUR) * 60,
+  min = 0,
 ): number {
-  return Math.max(0, Math.min(max, Math.round(minute / SLOT_MINUTES) * SLOT_MINUTES));
+  return Math.max(min, Math.min(max, Math.round(minute / SLOT_MINUTES) * SLOT_MINUTES));
+}
+
+/** Slides a block while keeping its duration, including earlier in the day. */
+export function shiftBlock(
+  startMinute: number,
+  endMinute: number,
+  deltaMinutes: number,
+  totalMinutes: number,
+): { start: number; end: number } {
+  const duration = endMinute - startMinute;
+  const delta = snapMinute(deltaMinutes, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY);
+  const start = Math.max(0, Math.min(totalMinutes - duration, startMinute + delta));
+  return { start, end: start + duration };
 }
 
 export interface CalendarLayout {

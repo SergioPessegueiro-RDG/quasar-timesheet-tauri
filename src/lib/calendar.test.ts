@@ -4,6 +4,7 @@ import {
   calendarFocusStart,
   isoDate,
   layoutOverlaps,
+  shiftBlock,
   snapMinute,
   startOfWeek,
 } from "./calendar.ts";
@@ -13,6 +14,13 @@ test("calendar date and snapping rules", () => {
   assert.equal(snapMinute(7), 0);
   assert.equal(snapMinute(8), 15);
   assert.equal(snapMinute(999), 480);
+  assert.equal(snapMinute(-8, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY), -15);
+});
+
+test("moving a block can go earlier in the day, not only later", () => {
+  assert.deepEqual(shiftBlock(12 * 60, 13 * 60, -60, 24 * 60), { start: 11 * 60, end: 12 * 60 });
+  assert.deepEqual(shiftBlock(12 * 60, 13 * 60, 60, 24 * 60), { start: 13 * 60, end: 14 * 60 });
+  assert.deepEqual(shiftBlock(15, 75, -60, 24 * 60), { start: 0, end: 60 });
 });
 
 test("overlap layout uses transitive clusters and releases columns", () => {

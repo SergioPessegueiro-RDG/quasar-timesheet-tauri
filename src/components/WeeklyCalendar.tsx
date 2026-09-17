@@ -22,6 +22,7 @@ import {
   calendarFocusStart,
   isoDate,
   layoutOverlaps,
+  shiftBlock,
   snapMinute,
   textColor,
 } from "../lib/calendar";
@@ -262,14 +263,14 @@ export function WeeklyCalendar({
       previewEnd = Math.max(current.minute, currentDrag.anchorMinute + MIN_BLOCK_MINUTES);
     } else {
       const rect = lanesRef.current!.getBoundingClientRect();
-      const delta = snapMinute(
+      const shifted = shiftBlock(
+        currentDrag.anchorMinute,
+        currentDrag.endMinute,
         ((event.clientY - currentDrag.anchorY) / rect.height) * totalMinutes,
-        Number.POSITIVE_INFINITY,
+        totalMinutes,
       );
-      const signedDelta = event.clientY < currentDrag.anchorY ? -delta : delta;
-      const duration = currentDrag.endMinute - currentDrag.anchorMinute;
-      previewStart = Math.max(0, Math.min(totalMinutes - duration, currentDrag.anchorMinute + signedDelta));
-      previewEnd = previewStart + duration;
+      previewStart = shifted.start;
+      previewEnd = shifted.end;
       previewDay = current.day;
     }
 
@@ -373,6 +374,15 @@ export function WeeklyCalendar({
     }
   }
 
+  function guideAt(day: number, minute: number): OutlookEvent | null {
+    const hits = guidesByDay[day].filter((guide) => {
+      const start = toMinutes(guide.startTime);
+      const end = toMinutes(guide.endTime);
+      return minute >= start && minute < end;
+    });
+    return hits.at(-1) ?? null;
+  }
+
   const preview = drag?.moved ? drag : null;
   const today = isoDate(clock);
   const nowMinute = clock.getHours() * 60 + clock.getMinutes() + clock.getSeconds() / 60;
@@ -430,6 +440,14 @@ export function WeeklyCalendar({
             onPointerUp={finishDrag}
             onPointerCancel={() => setDragState(null)}
             onKeyDown={handleKeyDown}
+            onContextMenu={(event) => {
+              if ((event.target as HTMLElement).closest(".time-block")) return;
+              const { day, minute } = point(event);
+              const guide = guideAt(day, minute);
+              if (!guide) return;
+              event.preventDefault();
+              setSelectedGuide(guide);
+            }}
             onDragOver={(event) => {
               if (event.dataTransfer.types.includes("application/x-quasar-activity-id")) {
                 event.preventDefault();
@@ -454,11 +472,6 @@ export function WeeklyCalendar({
                       role="note"
                       aria-label={`Outlook: ${guide.title}, ${guide.startTime} to ${guide.endTime}`}
                       title={`${guide.title}\n${guide.startTime}–${guide.endTime}${guide.notes ? `\n${guide.notes}` : ""}`}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setSelectedGuide(guide);
-                      }}
                       key={`${guide.externalId}-${guideIndex}`}
                       style={{
                         top: `${(toMinutes(guide.startTime) / totalMinutes) * 100}%`,
@@ -497,6 +510,7 @@ export function WeeklyCalendar({
                         onDoubleClick={() => onEdit(entry)}
                         onContextMenu={(event) => {
                           event.preventDefault();
+                          event.stopPropagation();
                           onEdit(entry);
                         }}
                         title={`${entry.activityName}\n${entry.startTime}–${entry.endTime}${entry.notes ? `\n${entry.notes}` : ""}`}
