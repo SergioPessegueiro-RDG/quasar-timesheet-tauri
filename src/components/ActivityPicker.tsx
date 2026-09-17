@@ -75,8 +75,10 @@ export function ActivityPicker({
         placeholder={placeholder}
         value={query}
         onFocus={(event) => {
-          setOpen(true);
           event.currentTarget.select();
+        }}
+        onClick={() => {
+          if (!disabled) setOpen(true);
         }}
         onChange={(event) => {
           setQuery(event.target.value);

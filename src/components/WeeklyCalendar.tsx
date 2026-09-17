@@ -186,6 +186,10 @@ export function WeeklyCalendar({
 
   function beginGridDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
+    if (selectedId !== null) {
+      setSelectedId(null);
+      return;
+    }
     const { day, minute } = point(event);
     lanesRef.current?.setPointerCapture(event.pointerId);
     lanesRef.current?.focus();

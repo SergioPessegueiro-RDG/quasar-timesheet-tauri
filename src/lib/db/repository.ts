@@ -36,7 +36,7 @@ const BLOCK_JOINS = `
 // ---------------------------------------------------------------------------
 
 function asBool(value: unknown): boolean {
-  return value === 1 || value === true || value === "1";
+  return value === true || value === 1 || value === 1n || value === "1";
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -233,12 +233,29 @@ export async function syncJiraData(
     const activityId = activityIds.get(worklog.issue.key);
     if (!activityId) continue;
     const times = jiraWorklogTimes(worklog.started, worklog.timeSpentSeconds);
-    const existing = await db.select<{ id: number; jiraDirty: number }>(
-        "SELECT id, jira_dirty AS jiraDirty FROM time_entries WHERE jira_worklog_id = $1 LIMIT 1",
+    const existing = await db.select<{
+      id: number;
+      jiraDirty: number;
+      date: string;
+      startTime: string;
+      endTime: string;
+    }>(
+        `SELECT id, jira_dirty AS jiraDirty, date,
+                start_time AS startTime, end_time AS endTime
+           FROM time_entries WHERE jira_worklog_id = $1 LIMIT 1`,
         [worklog.id],
       );
     if (existing[0]) {
-      if (asBool(existing[0].jiraDirty)) continue;
+      const local = existing[0];
+      const movedLocally = local.date !== times.date
+        || local.startTime !== times.startTime
+        || local.endTime !== times.endTime;
+      if (asBool(local.jiraDirty) || movedLocally) {
+        if (movedLocally && !asBool(local.jiraDirty)) {
+          await db.execute("UPDATE time_entries SET jira_dirty = 1 WHERE id = $1", [local.id]);
+        }
+        continue;
+      }
       await db.execute(
           `UPDATE time_entries
               SET activity_id = $1, activity_label = $2, date = $3,
