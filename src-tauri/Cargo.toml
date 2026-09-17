@@ -1,6 +1,6 @@
 [package]
 name = "quasar-timesheet-tauri"
-version = "0.1.5"
+version = "0.1.6"
 description = "QUASAR Timesheet Manager"
 authors = ["Sergio Pessegueiro <sergio.pessegueiro@raildeliverygroup.com>"]
 edition = "2021"
