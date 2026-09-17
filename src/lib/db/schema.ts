@@ -22,7 +22,7 @@ const MIGRATIONS: string[][] = [
         name        TEXT    NOT NULL,
         color       TEXT    NOT NULL,
         sort_order  INTEGER NOT NULL DEFAULT 0,
-        collapsed   INTEGER NOT NULL DEFAULT 0,
+        collapsed   INTEGER NOT NULL DEFAULT 1,
         created_at  TEXT    NOT NULL
      )`,
     `CREATE TABLE activities (

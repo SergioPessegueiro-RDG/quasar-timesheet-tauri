@@ -49,6 +49,11 @@ export async function listProjects(): Promise<Project[]> {
   return rows.map((row) => ({ ...row, collapsed: asBool(row.collapsed) }));
 }
 
+export async function collapseAllProjects(): Promise<void> {
+  const db = await database();
+  await db.execute("UPDATE projects SET collapsed = 1 WHERE collapsed = 0");
+}
+
 /** Picks the first unused palette colour, so two projects rarely start alike. */
 export async function addProject(name: string, color?: string): Promise<number> {
   const db = await database();
@@ -58,7 +63,7 @@ export async function addProject(name: string, color?: string): Promise<number> 
   const sortOrder = existing.length;
 
   const result = await db.execute(
-    "INSERT INTO projects (name, color, sort_order, created_at) VALUES ($1, $2, $3, $4)",
+    "INSERT INTO projects (name, color, sort_order, collapsed, created_at) VALUES ($1, $2, $3, 1, $4)",
     [name, chosen, sortOrder, now()],
   );
   return result.lastInsertId;

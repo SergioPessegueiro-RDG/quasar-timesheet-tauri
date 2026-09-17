@@ -44,6 +44,7 @@ export function TimerBar({ activities, onFinish }: TimerBarProps) {
     setStartedAt(null);
     if (!activity || !duration) return setStatus("Timer stopped — nothing logged.");
     onFinish(activity, startedAt, duration);
+    setActivityId(null);
     setStatus(`Timer stopped at ${duration} min — add a description to save.`);
   }
 

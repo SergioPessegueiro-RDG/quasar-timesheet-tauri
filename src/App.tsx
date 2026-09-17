@@ -28,6 +28,7 @@ import {
   addActivity,
   addProject,
   applyTemplateToWeek,
+  collapseAllProjects,
   deleteTemplateEntry,
   deleteActivity,
   deleteProject,
@@ -262,7 +263,7 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
+    collapseAllProjects().then(() => Promise.all([
       listProjects(),
       listActivities(),
       listKnownJiraProjects(),
@@ -276,7 +277,7 @@ export default function App() {
       getSetting("jira_email"),
       getSetting("jira_api_token"),
       getSetting("welcome_completed"),
-    ])
+    ]))
       .then(([
         p, a, jiraProjects, , savedTheme, savedShowTimer,
         savedStartHour, savedEndHour, savedShowWeekends,
@@ -1017,6 +1018,7 @@ export default function App() {
               && !window.confirm("Discard this tracked time without logging it?")
             ) return;
             setEditor(null);
+            if (!editor.entry || editor.source === "timer") setArmedActivity(null);
           }}
           onSave={saveTimeBlock}
           onLoadJiraTransitions={loadJiraTransitions}

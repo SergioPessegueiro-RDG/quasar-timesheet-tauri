@@ -48,7 +48,7 @@ export function TimeBlockDialog({
   onTransitionJira,
 }: TimeBlockDialogProps) {
   const initialActivity = activities.find(({ id }) => id === (entry?.activityId ?? initial.activityId));
-  const [activityId, setActivityId] = useState(initialActivity?.id ?? activities[0]?.id ?? 0);
+  const [activityId, setActivityId] = useState(initialActivity?.id ?? 0);
   const [date, setDate] = useState(entry?.date ?? initial.date);
   const [startTime, setStartTime] = useState(entry?.startTime ?? initial.startTime);
   const [endTime, setEndTime] = useState(entry?.endTime ?? initial.endTime);
