@@ -321,12 +321,16 @@ export function WeeklyCalendar({
       setSelectedId(finished.entry?.id ?? null);
       return;
     } else if (finished.entry) {
-      await onMove(
-        finished.entry,
-        dateKeys[finished.previewDay],
-        fullTime(finished.previewStart),
-        fullTime(finished.previewEnd),
-      );
+      const date = dateKeys[finished.previewDay];
+      const startTime = fullTime(finished.previewStart);
+      const endTime = fullTime(finished.previewEnd);
+      if (
+        date !== finished.entry.date
+        || startTime !== finished.entry.startTime
+        || endTime !== finished.entry.endTime
+      ) {
+        await onMove(finished.entry, date, startTime, endTime);
+      }
       setSelectedId(finished.entry.id);
     }
   }

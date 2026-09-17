@@ -102,6 +102,16 @@ const MIGRATIONS: string[][] = [
        ON projects(jira_key)
        WHERE jira_key IS NOT NULL`,
   ],
+  [
+    `ALTER TABLE time_entries ADD COLUMN jira_synced_date TEXT`,
+    `ALTER TABLE time_entries ADD COLUMN jira_synced_start TEXT`,
+    `ALTER TABLE time_entries ADD COLUMN jira_synced_end TEXT`,
+    `UPDATE time_entries
+        SET jira_synced_date = date,
+            jira_synced_start = start_time,
+            jira_synced_end = end_time
+      WHERE jira_worklog_id IS NOT NULL AND jira_dirty = 0`,
+  ],
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

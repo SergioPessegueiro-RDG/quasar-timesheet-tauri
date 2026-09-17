@@ -39,6 +39,16 @@ function asBool(value: unknown): boolean {
   return value === true || value === 1 || value === 1n || value === "1";
 }
 
+function jiraDirtyFromSnapshot(dateParam: string, startParam: string, endParam: string): string {
+  return `CASE
+            WHEN jira_worklog_id IS NULL THEN jira_dirty
+            WHEN jira_synced_date = ${dateParam}
+             AND jira_synced_start = ${startParam}
+             AND jira_synced_end = ${endParam} THEN 0
+            ELSE 1
+          END`;
+}
+
 export async function listProjects(): Promise<Project[]> {
   const db = await database();
   const rows = await db.select<Project>(
@@ -250,10 +260,19 @@ export async function syncJiraData(
       const movedLocally = local.date !== times.date
         || local.startTime !== times.startTime
         || local.endTime !== times.endTime;
-      if (asBool(local.jiraDirty) || movedLocally) {
-        if (movedLocally && !asBool(local.jiraDirty)) {
+      if (movedLocally) {
+        if (!asBool(local.jiraDirty)) {
           await db.execute("UPDATE time_entries SET jira_dirty = 1 WHERE id = $1", [local.id]);
         }
+        continue;
+      }
+      if (asBool(local.jiraDirty)) {
+        await db.execute(
+          `UPDATE time_entries
+              SET jira_dirty = 0, jira_synced_date = $1, jira_synced_start = $2, jira_synced_end = $3
+            WHERE id = $4`,
+          [times.date, times.startTime, times.endTime, local.id],
+        );
         continue;
       }
       await db.execute(
@@ -261,7 +280,8 @@ export async function syncJiraData(
               SET activity_id = $1, activity_label = $2, date = $3,
                   start_time = $4, end_time = $5, notes = $6, jira_key = $7,
                   jira_project = $8, issue_type = $9, updated_at = $10,
-                  external_source = 'jira', external_id = $11, jira_dirty = 0
+                  external_source = 'jira', external_id = $11, jira_dirty = 0,
+                  jira_synced_date = $3, jira_synced_start = $4, jira_synced_end = $5
             WHERE id = $12`,
           [
             activityId, worklog.issue.summary, times.date, times.startTime, times.endTime,
@@ -276,8 +296,9 @@ export async function syncJiraData(
           `INSERT INTO time_entries
               (activity_id, activity_label, date, start_time, end_time, notes,
                jira_key, jira_project, issue_type, created_at, updated_at,
-               external_source, external_id, jira_worklog_id, jira_uploaded_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, 'jira', $11, $11, $10)`,
+               external_source, external_id, jira_worklog_id, jira_uploaded_at,
+               jira_synced_date, jira_synced_start, jira_synced_end)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, 'jira', $11, $11, $10, $3, $4, $5)`,
           [
             activityId, worklog.issue.summary, times.date, times.startTime, times.endTime,
             worklog.notes, worklog.issue.key, DEFAULT_JIRA_PROJECT,
@@ -381,7 +402,7 @@ export async function addTimeEntry(entry: NewTimeEntry): Promise<number> {
 export async function markJiraWorklogUploaded(id: number, worklogId: string): Promise<void> {
   const db = await database();
   await db.execute(
-    "UPDATE time_entries SET jira_worklog_id = $1, jira_uploaded_at = $2, jira_dirty = 0 WHERE id = $3",
+    "UPDATE time_entries SET jira_worklog_id = $1, jira_uploaded_at = $2, jira_dirty = 0, jira_synced_date = date, jira_synced_start = start_time, jira_synced_end = end_time WHERE id = $3",
     [worklogId, now(), id],
   );
 }
@@ -397,7 +418,7 @@ export async function moveTimeEntry(
   await db.execute(
     `UPDATE time_entries
         SET date = $1, start_time = $2, end_time = $3, updated_at = $4,
-            jira_dirty = CASE WHEN jira_worklog_id IS NOT NULL THEN 1 ELSE jira_dirty END
+            jira_dirty = ${jiraDirtyFromSnapshot("$1", "$2", "$3")}
       WHERE id = $5`,
     [date, startTime, endTime, now(), id],
   );
@@ -410,7 +431,7 @@ export async function updateTimeEntry(entry: TimeEntry): Promise<void> {
     `UPDATE time_entries
         SET activity_id = $1, date = $2, start_time = $3, end_time = $4, notes = $5,
             jira_key = $6, jira_project = $7, issue_type = $8, updated_at = $9,
-            jira_dirty = CASE WHEN jira_worklog_id IS NOT NULL THEN 1 ELSE jira_dirty END
+            jira_dirty = ${jiraDirtyFromSnapshot("$2", "$3", "$4")}
       WHERE id = $10`,
     [
       entry.activityId,

@@ -75,6 +75,19 @@ export function isJiraSyncPending(
   return Boolean(entry.jiraKey && (!entry.jiraWorklogId || entry.jiraDirty));
 }
 
+/** A Jira worklog is pending only while local times differ from the last synced copy. */
+export function isJiraTimeDirty(
+  hasWorklog: boolean,
+  current: { date: string; startTime: string; endTime: string },
+  synced: { date?: string | null; startTime?: string | null; endTime?: string | null },
+): boolean {
+  if (!hasWorklog) return false;
+  if (!synced.date || !synced.startTime || !synced.endTime) return true;
+  return current.date !== synced.date
+    || current.startTime !== synced.startTime
+    || current.endTime !== synced.endTime;
+}
+
 export function activityMatchesQuery(
   activity: Pick<Activity, "name" | "jiraKey">,
   query: string,
